@@ -1,0 +1,17 @@
+Auditoria de dependências de produção (npm audit --omit=dev), 2026-11-15
+Correção: npm audit fix sem --force (só versões compatíveis) + next/eslint-config-next 16.2.6 -> 16.4.6.
+
+Antes                          crítico  alto  moderado  baixo
+  nestjs-project                     3    21        13      2
+  next-frontend                      2    14         7      2
+Depois
+  nestjs-project                     0     0        35      0
+  next-frontend                      0     0         4      2
+
+Resíduo aceito (sem correção compatível; exige major de typeorm/@nestjs-modules/mailer/shadcn):
+  glob/minimatch (DoS em padrões de glob do próprio código, sem entrada do usuário)
+  deepmerge (via CLI shadcn, ferramenta de geração de componentes, fora do runtime)
+
+Verificação depois da correção (cópia limpa, container descartável na rede da stack):
+  API      tsc OK · lint OK · npm test 37 suítes / 249 testes OK · test:e2e 5 suítes / 74 testes OK
+  Frontend tsc OK · lint OK · vitest 17 arquivos / 67 testes OK · next build OK (Next.js 16.4.6)
