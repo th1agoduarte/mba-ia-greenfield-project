@@ -1,0 +1,5 @@
+    slug     | status | size_bytes | duration_seconds | has_thumbnail | processing_error 
+-------------+--------+------------+------------------+---------------+------------------
+ TgBxc74qEZo | ready  |      35207 |            2.000 | t             | 
+(1 row)
+

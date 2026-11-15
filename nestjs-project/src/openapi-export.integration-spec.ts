@@ -128,4 +128,44 @@ describe('exportSpec (integration)', () => {
       }
     }
   });
+
+  describe('videos (phase 03)', () => {
+    const videoOperations = [
+      { path: '/videos', method: 'post', status: '201' },
+      {
+        path: '/videos/{slug}/upload/part-urls',
+        method: 'post',
+        status: '200',
+      },
+      { path: '/videos/{slug}/upload/parts', method: 'get', status: '200' },
+      { path: '/videos/{slug}/upload/complete', method: 'post', status: '202' },
+      { path: '/videos/{slug}/upload', method: 'delete', status: '204' },
+      { path: '/videos/{slug}', method: 'get', status: '200' },
+      { path: '/videos/{slug}/stream', method: 'get', status: '302' },
+      { path: '/videos/{slug}/download', method: 'get', status: '302' },
+    ];
+
+    it.each(videoOperations)(
+      '$method $path has a summary, access-token security, its success status and a 401 error envelope',
+      ({ path, method, status }) => {
+        const paths = document.paths as Record<
+          string,
+          Record<string, Record<string, unknown>>
+        >;
+        const operation = paths[path]?.[method];
+        expect(operation).toBeDefined();
+        expect((operation.summary as string).length).toBeGreaterThan(0);
+        const security = operation.security as Array<Record<string, unknown>>;
+        expect(security.some((req) => 'access-token' in req)).toBe(true);
+        const responses = operation.responses as Record<
+          string,
+          { content?: Record<string, { schema?: { $ref?: string } }> }
+        >;
+        expect(responses[status]).toBeDefined();
+        expect(
+          responses['401']?.content?.['application/json']?.schema?.$ref,
+        ).toBe('#/components/schemas/ApiErrorEnvelope');
+      },
+    );
+  });
 });

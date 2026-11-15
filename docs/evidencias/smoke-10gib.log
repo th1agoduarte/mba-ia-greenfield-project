@@ -1,0 +1,216 @@
+
+==> Register smoke_1794762758_23026@example.com
+
+==> Confirm the account with the token from Mailpit
+
+==> Login
+
+==> POST /videos — pre-register as draft (video-10gib.mp4, 10700449812 bytes)
+{
+  "id": "4634b676-f244-42d0-9f15-14f843225f39",
+  "slug": "xFQ0UAt3tfs",
+  "title": "Smoke video-10gib.mp4",
+  "status": "draft",
+  "upload": {
+    "part_size": 67108864,
+    "part_count": 160,
+    "max_urls_per_request": 100
+  }
+}
+
+==> Upload 160 part(s) of 67108864 bytes directly to the object storage
+  part 1 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="1f4897a66e2423e1ecbffc2b20be0615"
+  part 2 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="b4f5954ec237a907446766357ffe152a"
+  part 3 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="ab811e798d969f03d1293626cc14a976"
+  part 4 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="bb51b2a0938f56d7951094d5f89c578e"
+  part 5 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="82566aeea8817592d8441dcfa92576e2"
+  part 6 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="b618bae685aef554cc6657e91c6848d9"
+  part 7 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="f471830df54a9fc0671a7b51f6ac5dbd"
+  part 8 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="dcfcaa97ae2889794b59827c6517b6d6"
+  part 9 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="83197f2477b05ef2afa87c80a270c433"
+  part 10 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="bd3c82fa9bd85bbde52ef4d8a69c7f1d"
+  part 11 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="34921326b7bd0c2d8da583c2fec8f46b"
+  part 12 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="0508d702a875b8f2dc432719919ec4cc"
+  part 13 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="1cf8d6a542c46ff462e52a96d79e55a9"
+  part 14 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="bb8d0c841c7eda0bde10bfa44935e39b"
+  part 15 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="8b713621f4eee1de1136f7b51d20c782"
+  part 16 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="430a60b0316b18101f1c9cd44d126be3"
+  part 17 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="0c3144edbf5c3da87d09aef2dba18cb2"
+  part 18 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="aabd8944df16e0edae907cd010460cfa"
+  part 19 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="145e44d3c59ef2468a727e07686b95d0"
+  part 20 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="761792cb5f451eaf09fc3e0088eb1009"
+  part 21 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="7a9b0649bd24af7fd4a447f4549ad1f0"
+  part 22 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="22342c53afc5f2ace22cac13cb6b15bf"
+  part 23 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="05be7a9e1c10d97775a966bf9f51db87"
+  part 24 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="aed5802c176ccda56e2ae52225e355a7"
+  part 25 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="91040dba3d7a647521e1e371485c170a"
+  part 26 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="4f2b30a08397b4f73b99de8a6546a08b"
+  part 27 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="e9d92a3fbb042ebc0716ccb453bbe929"
+  part 28 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="26ea3512310dd7dc71dbbcaeba7a00bb"
+  part 29 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="e45a6dac9552bd4055b3e4a47c1aba21"
+  part 30 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="bc411059d0d8c773838bcfe73ba37c4c"
+  part 31 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="cb15f6bdecac49694434a2f22c5438de"
+  part 32 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="cb5f80fc9439769d5576042db8062e62"
+  part 33 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="b5a2c6155b62ba8ccebd5573eea15f00"
+  part 34 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="8bd89623bea822cb72cf5b5f7ea4c3ad"
+  part 35 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="8462d1fb0bdc060ffddfdf462fb0780d"
+  part 36 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="70b0a1cf5f6b4c2e496014a7289f41ea"
+  part 37 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="bafedc50dee846db78d0e9ff9100f8da"
+  part 38 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="76e364be5bf2d153d983bcd90219bc0c"
+  part 39 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="44f246f38a6425a5ae319b422ec6afa1"
+  part 40 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="6866bd3da629a358d75f60d614f15529"
+  part 41 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="9a065617463d6e05708517b22a1445d4"
+  part 42 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="88ead419355d583d53fd8734f8175e56"
+  part 43 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="6a6fc8df466ec792da91b3149a14c4d5"
+  part 44 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="02249b68d1f9b6df6f354622b3a97bcc"
+  part 45 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="61b8d839def8aefd430088c687e8eddf"
+  part 46 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="145ce51fbb94c796808a52162d723e1c"
+  part 47 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="f788072005c37b92e3d102365c64350e"
+  part 48 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="b8533f00cf128ccb16a6ba2a2242c469"
+  part 49 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="b93005cf703406817e61768a3fa786e2"
+  part 50 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="24c89227f2ad9083c355a416ed14aab6"
+  part 51 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="0d774f095896cf724509c2193bf465fc"
+  part 52 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="bb822e72221fb4354b22ae73ecc3abd0"
+  part 53 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="157c742861fbd35d6c8a03f69e1f4f8e"
+  part 54 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="3fca06977f855c5497f5db13f82633a9"
+  part 55 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="163576a5b8a072f4a71d194a1468ff2a"
+  part 56 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="72ce221cf78c98c1ddfb83b0814eb75d"
+  part 57 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="84e28fce77f0f87eb15030a365528a18"
+  part 58 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="b5fcebcba034b2cd19281ac6d4f54691"
+  part 59 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="6d1aa7116d7f80259581a12ae53a53a4"
+  part 60 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="d3f6a0c7ab4f86de5aad94786069420f"
+  part 61 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="67e20871462ca8e26f8f797aa1b72895"
+  part 62 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="e01a2a2fbfd00b7babccc0c210b4ba88"
+  part 63 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="7f2f0ff1b49a6dd75d166e6626c5d2bc"
+  part 64 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="3adc939c4cea9db90d03e1073e5a75d6"
+  part 65 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="e7aef2ec28c417100b1647c38d6bdc6f"
+  part 66 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="542740e83bc190e1dcb2c669ae8565af"
+  part 67 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="8bf941a29843bd177268625119667782"
+  part 68 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="de69b6be2283f88bbf5af5fd85f043ca"
+  part 69 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="9af6df9ce52751273a158f6965aa445a"
+  part 70 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="fa201bc34c1c545e36ffbfb0847665aa"
+  part 71 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="234c02d6dc04c930d1adbbf41d3d2084"
+  part 72 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="0eb6f1f9fd52d5f4ddbb00c702460f9e"
+  part 73 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="ed9995758acd0c3405fb77ae36eaea73"
+  part 74 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="bbb3c9568020b70de58cca52b2ac5eb1"
+  part 75 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="8716d89c21c896be39d41cf25c97af8f"
+  part 76 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="d9665e18635e9dcb551098287ea85cd9"
+  part 77 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="05094bb0f3d0affc0c12faaf7476a68c"
+  part 78 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="1c32b14efb80812ac89da247a76a970c"
+  part 79 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="ca5136aaf327afbb5e0f3892c75ada2d"
+  part 80 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="997f9d3b217ba10c61b7a87b2726cb45"
+  part 81 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="4c2ca48e9f5ac2e98138a91a617f9765"
+  part 82 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="e4cf1d10c885ba905161fe4caf563770"
+  part 83 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="4424501e0bb0f754238fa06e0c31aac2"
+  part 84 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="e1bc824d206840e4c85c1e27db426e09"
+  part 85 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="8fbc5995e3400790a4851ccaaa9acd84"
+  part 86 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="a732b1e985ab809df3ef23a81d7304ff"
+  part 87 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="69a9797fad7a0daea3585408a601add8"
+  part 88 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="dca3d9913888bda8733812985252a728"
+  part 89 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="e7321c1472fa80e9703df0b84451130a"
+  part 90 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="a6eb1dd162c88afcd599848c498db2b5"
+  part 91 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="08e80473bd97d057f0843d792353101d"
+  part 92 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="76da0b82015e3edde922d1d92d8e3a8f"
+  part 93 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="28e175e42d5418f647b74f050335a561"
+  part 94 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="b01a0e995edb3d332cbafb03792a94c1"
+  part 95 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="c7a249a2e1e351f1133dd0658e70904c"
+  part 96 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="5a8b79e08ff531c8d617232c52d87555"
+  part 97 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="1b7572350195db6b58d0b735e165d645"
+  part 98 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="fc79330e9235850f79b3538cc9bd250b"
+  part 99 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="8bf4a7b0fe82dae37d1706e289c536fe"
+  part 100 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="2c4f094cea3f417057ce2ed8138ecc38"
+  part 101 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="c08a8534b01585aa7d9608342da2fa7d"
+  part 102 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="77f593e87152f0f5baf377d9eed4ed65"
+  part 103 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="f6c39368e2a9d6e0deaa429ec67ef11f"
+  part 104 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="9cc6c4de95fee79ff74658aae7f95eea"
+  part 105 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="cbd2c6861d223885b722ccee83a01065"
+  part 106 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="f5d0bc1ddf146b1fab58e0a5f52af981"
+  part 107 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="67d84f25a5b6159d721aab32e5808463"
+  part 108 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="0f9dc6f629df73f70e911a0f0a361d37"
+  part 109 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="92d3108fce8d1dcb143f9fb2c6d413bd"
+  part 110 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="6f4eabf29f570875fc1729d60acaa804"
+  part 111 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="499c42911ae4ccb75b819aea6063c707"
+  part 112 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="8e2a9b8a31bb2bae3e54c28a3d1a7bcd"
+  part 113 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="010051cd65aee9ff2679579fa7a314fc"
+  part 114 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="a27028818cf71221d3fcbfb2f41cc99c"
+  part 115 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="fcff85ea10445db19cfc76a1036fbbb2"
+  part 116 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="00110f109e4c19b21e8ff13ce4ad5bd4"
+  part 117 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="7dc116738737dce09b5b6eb73a3ff033"
+  part 118 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="503924e9e8647d06e8289ad0df161224"
+  part 119 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="a2375f47f1f33f326209af806e0f650e"
+  part 120 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="fabe0cb1bbafd6db2af948bed70c81ad"
+  part 121 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="1dd1669b7802172ed9a191c2db7d96c9"
+  part 122 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="d51bdfdde0cb1081ac9f35365f1b4c80"
+  part 123 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="e18dcde1bcdff7b7c21580389c3ad781"
+  part 124 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="1ee22af5a3a496ed8af1d6185b9e7036"
+  part 125 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="7976ab989a28bbda4055d575fb9b2f53"
+  part 126 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="08e675e711858273c2d32e4ba3ddb2fa"
+  part 127 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="eda5756fb7f58e8481518a8989ab407f"
+  part 128 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="a40c610adf377ddb2187c70fb83c3da5"
+  part 129 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="68e932da1f1f7b8e816eca7bb8031940"
+  part 130 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="ba3a40fe3a37ac8418b0f315c97c975f"
+  part 131 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="4b603b44d8f870cd91021d089bab1d93"
+  part 132 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="9f21b6231a385841d4a7a88f4c239bdf"
+  part 133 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="d6a8af2deded827dca186db13325f823"
+  part 134 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="23d13074b7c74764267926da1e6a3f90"
+  part 135 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="47713d483627d68bd982a2c6805ac82b"
+  part 136 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="8fba20afb40b2994a4bb9ad762f3305d"
+  part 137 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="2143f0f48cf8c25b47902a274d00966f"
+  part 138 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="894166ea5562baae50c942fb7236ec28"
+  part 139 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="db34fa042bd5d492dc3f2670e0bbb85a"
+  part 140 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="b6c154034d44a830aaf8d2f5dbdf4a8f"
+  part 141 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="49ee9817b3f32eae34119fc358dd3749"
+  part 142 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="33202d755d55e9c6cb39c2378941e13c"
+  part 143 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="052dfa03921e1d865524f8fae3c8c1e6"
+  part 144 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="5596acf9805c9e6b1db1ad9f827422b7"
+  part 145 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="932c85bf561cd487dbe79f380682909e"
+  part 146 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="dd234282c1358c103d548a9c97496ceb"
+  part 147 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="e4a6d9a088de8ff7cd72393abad4f6f2"
+  part 148 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="e1770eb844fff318bf36d3512f4b5302"
+  part 149 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="5f03cea815a7a368ee93d90edcb0f651"
+  part 150 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="fbb95f796bec999d0e6819c18091b190"
+  part 151 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="a685d56032091d64b1f09433107c37ab"
+  part 152 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="cb329ae5f55faff054c18f11fa4142d1"
+  part 153 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="e740163f3102657241859e6fbdd8b7e5"
+  part 154 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="9995e2f8026f39db9795613decbef042"
+  part 155 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="8cdb388cb897bf85346dd65ea7a1ba2d"
+  part 156 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="730ca58a1b94df7504a05bfca6854964"
+  part 157 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="76969bcd90ae4df7192e8e15feb69316"
+  part 158 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="9a7fc21c6d2cb4369a33110311718951"
+  part 159 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="54d3cc01dc3504c173c5f503a7642fca"
+  part 160 → http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/original etag="82131a1454ea17ff848ac64b7377ef76"
+  parts stored: 160
+
+==> POST /videos/xFQ0UAt3tfs/upload/complete
+{"id":"4634b676-f244-42d0-9f15-14f843225f39","slug":"xFQ0UAt3tfs","title":"Smoke video-10gib.mp4","status":"processing"}
+
+==> Wait for the video-worker container to process it
+  status: processing
+  status: ready
+{
+  "slug": "xFQ0UAt3tfs",
+  "status": "ready",
+  "duration_seconds": 2268.567,
+  "metadata": {
+    "width": 1920,
+    "height": 1080,
+    "bit_rate": 37734657,
+    "frame_rate": 30,
+    "audio_codec": null,
+    "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+    "video_codec": "h264"
+  },
+  "size_bytes": 10700449812,
+  "thumbnail": "http://localhost:9002/streamtube-videos/videos/4634b676-f244-42d0-9f15-14f843225f39/thumbnail.jpg"
+}
+  thumbnail content-type: image/jpeg
+
+==> GET /videos/xFQ0UAt3tfs/stream → 302 → Range request on the storage
+  API: 302 · storage with Range 0-1023: 206 1024
+
+==> GET /videos/xFQ0UAt3tfs/download → 302 → attachment
+  downloaded file is identical to the upload
+  Content-Disposition: attachment; filename="video-10gib.mp4"
+
+SMOKE OK — video xFQ0UAt3tfs processed by the video-worker container
+exit=0 elapsed=149s

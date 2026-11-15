@@ -13,6 +13,8 @@ docker compose ps   # all services must show status "running"
 Then verify each infrastructure service is actually ready to accept connections — not just running:
 
 - **PostgreSQL:** `docker compose exec db pg_isready -U streamtube` — expect `accepting connections`
+- **MinIO / RabbitMQ:** `docker compose ps` shows `minio` and `rabbitmq` as `healthy` and `minio-init` as `Exited (0)` (bucket created)
+- **Video worker:** `docker compose logs video-worker` shows `Consuming videos.processing` (it waits for `node_modules` on a fresh clone)
 
 Only start the NestJS dev server (`npm run start:dev`) when the user **explicitly** asks to run the application — never as part of "start the environment".
 
@@ -34,6 +36,13 @@ docker compose exec nestjs-api npm run start:dev
 Services:
 - `nestjs-api` — NestJS API, port `3000`
 - `db` — PostgreSQL 17, port `5432`, database `streamtube`, user/password `streamtube`
+- `mailpit` — SMTP `1025`, UI/API `8025`
+- `minio` — S3-compatible object storage (`pgsty/minio`), API `${MINIO_API_PORT:-9000}`, console `${MINIO_CONSOLE_PORT:-9001}`
+- `minio-init` — one-shot: creates the private bucket `S3_BUCKET` (`mc mb --ignore-existing`) and exits
+- `rabbitmq` — RabbitMQ 4.2 (video processing queue), AMQP `5672`, management UI `15672`
+- `video-worker` — same image/source as the API; runs `npm run start:worker:dev` (`src/worker.ts`, FFmpeg) and restarts on changes in `src/`
+
+The image (`Dockerfile.dev`) includes `ffmpeg`/`ffprobe`, used by the worker and by the tests that run in `nestjs-api`.
 
 All verification and teardown commands run on the **host machine**:
 
@@ -62,6 +71,9 @@ docker compose down
 npm run start:dev                        # Dev server with hot-reload
 npm run build                            # Compile to dist/
 npm run start:prod                       # Run compiled build
+npm run start:worker:dev                 # Video worker (normally run by the video-worker service)
+npm run start:worker                     # Compiled worker (dist/worker.js)
+npm run openapi:export                   # Regenerate openapi.json (commit it after API changes)
 
 npm test                                 # Unit tests
 npm run test:watch                       # Unit tests in watch mode
@@ -78,9 +90,14 @@ npm run format                           # Prettier formatting
 ```bash
 docker compose ps
 docker compose logs nestjs-api
+docker compose logs -f video-worker
 docker compose exec db pg_isready -U streamtube
 curl http://localhost:3000
+docker compose run --rm minio-init          # re-create the bucket (idempotent)
+scripts/smoke-video-pipeline.sh [file]      # full pipeline from the host, through the video-worker container
 ```
+
+`scripts/smoke-video-pipeline.sh` needs the API dev server running, `jq` on the host and `MAILPIT_URL` pointing to the Mailpit UI port (default `http://localhost:8025`).
 
 ### Test execution
 
@@ -126,6 +143,14 @@ Do not add new test-file suffixes; if a new test type is needed, update the rege
 
 ## Environment File Conventions
 
+Phase 03 variables (validated in `src/config/env.validation.ts`, documented in `.env.example`):
+
+- `S3_ENDPOINT` — storage endpoint used by the API/worker inside the Compose network (`http://minio:9000`).
+- `S3_PUBLIC_ENDPOINT` — host the presigned URLs are **signed for**; it must be reachable by the client and match the published port (`http://localhost:${MINIO_API_PORT}`). Presigned URLs embed the host, so a mismatch makes uploads/streams fail with a signature error.
+- `S3_ACCESS_KEY` / `S3_SECRET_KEY` / `S3_BUCKET` / `S3_REGION` / `S3_PRESIGN_EXPIRES_SECONDS` (3600).
+- `RABBITMQ_URL` (`amqp://…@rabbitmq:5672`), `RABBITMQ_NAMESPACE` (`videos` → exchange `videos`, queues `videos.processing`, `.retry`, `.dead`), `VIDEO_PROCESSING_RETRY_DELAY_MS` (5000), `VIDEO_PROCESSING_MAX_ATTEMPTS` (3).
+- `MINIO_API_PORT`, `MINIO_CONSOLE_PORT`, `RABBITMQ_PORT`, `RABBITMQ_MANAGEMENT_PORT`, `RABBITMQ_USER`, `RABBITMQ_PASSWORD` — only read by `compose.yaml` (host ports and broker credentials).
+
 `.env` is parsed by both Docker Compose and `dotenv` — values containing shell-special characters (`<`, `>`, `|`, `&`, spaces) **must be quoted** or rewritten:
 
 ```dotenv
@@ -148,6 +173,44 @@ NestJS with standard module structure. Source lives in `src/`, compiled output i
 
 - Each domain feature gets its own module (e.g., `UsersModule`, `VideosModule`) registered in `AppModule`
 - Controllers handle HTTP routing; Services hold business logic; both are scoped to their module
+
+## Videos module (Phase 03)
+
+Decisions: `docs/decisions/technical-decisions-phase-03-videos.md`. Plan/progress: `docs/phases/phase-03-videos/`.
+
+| Path | Responsibility |
+|------|----------------|
+| `src/videos/entities/video.entity.ts` | `videos` table (`VideoStatus`: `draft` → `processing` → `ready` \| `failed`), owned by a channel (`channel_id`, cascade) |
+| `src/videos/videos.service.ts` | Upload lifecycle (draft + multipart, part URLs, list/abort, complete → publish), owner-only reads, stream/download URLs |
+| `src/videos/videos.controller.ts` | HTTP routes below (`@SkipThrottle()`, owner-only; non-owners get `404 VIDEO_NOT_FOUND`) |
+| `src/videos/video-processing.service.ts` | Worker logic: ffprobe metadata, thumbnail, `ready`/`failed`; ignores videos not in `processing` (idempotent) |
+| `src/videos/video-processing.module.ts`, `src/videos/video-worker.ts` | Worker feature: starts the queue consumer on bootstrap |
+| `src/worker.module.ts`, `src/worker.ts` | Worker process root (no HTTP); `src/config/root.imports.ts` holds the config/DB root shared with `AppModule` |
+| `src/storage/` | `StorageService` (AWS SDK v3): multipart, presigned PUT/GET (public endpoint), `putObject`, `headObject` |
+| `src/messaging/` | RabbitMQ via `amqp-connection-manager`: topology, `VideoProcessingPublisher` (confirms), `VideoProcessingConsumer` (prefetch 1, retry queue with TTL + `x-attempt`, parking queue) |
+| `src/media/media-probe.service.ts` | Spawns `ffprobe`/`ffmpeg` on a presigned URL; `NonRetryableProcessingError` for inputs that will never work |
+
+Endpoints (all `Authorization: Bearer`, contract in `openapi.json`):
+
+| Method & route | Result |
+|----------------|--------|
+| `POST /videos` | `201` draft + `upload { part_size: 67108864, part_count, max_urls_per_request: 100 }`; `file_size` ≤ 10737418240 |
+| `POST /videos/{slug}/upload/part-urls` | `200` presigned `PUT` URLs (1 h) for ≤ 100 parts |
+| `GET /videos/{slug}/upload/parts` | `200` parts already stored (resume) |
+| `POST /videos/{slug}/upload/complete` | `202` `processing` + `video.uploaded` published (idempotent; compensates to `draft` if publishing fails) |
+| `DELETE /videos/{slug}/upload` | `204` multipart aborted, draft removed |
+| `GET /videos/{slug}` | `200` status, duration, metadata, presigned `thumbnail_url` |
+| `GET /videos/{slug}/stream` | `302` to presigned GET (storage answers `Range` with `206`); `409 VIDEO_NOT_READY` unless `ready` |
+| `GET /videos/{slug}/download` | `302` to presigned GET with `Content-Disposition: attachment` |
+
+Storage keys: `videos/{id}/original`, `videos/{id}/thumbnail.jpg` in the private bucket `S3_BUCKET`.
+
+### Testing the video stack
+
+- Storage, queue and FFmpeg are tested for real (no mocks in integration/e2e). Before compiling a test module, call `useInternalStorageEndpointForTests()` (`src/test/storage.ts`) — presigned URLs must be signed for `minio:9000` inside the container — and `useIsolatedQueueNamespaceForTests(label)` (`src/test/messaging.ts`) so the `video-worker` container never consumes test messages; delete the namespace in `afterAll` (`deleteQueueNamespace`).
+- `test/videos-flow.e2e-spec.ts` runs the whole pipeline: it loads `VideoProcessingModule` into the same app as `AppModule` (`createVideosE2EApp(label, [VideoProcessingModule])`). Do not boot `WorkerModule` next to `AppModule` in one process: two TypeORM roots break the default DataSource.
+- Fixture: `test/fixtures/sample.mp4` (2 s H.264/AAC), read with `readSampleVideo()` (`src/test/fixtures.ts`).
+- `amqp-connection-manager` is pinned to 4.x: 5.x depends on the ESM-only `promise-breaker@7`, which Jest's CommonJS runtime cannot load.
 
 ## Code Conventions
 
