@@ -1,5 +1,9 @@
 import { NonRetryableProcessingError } from './media.errors';
-import { FfprobeOutput, toProbeResult } from './media-probe.service';
+import {
+  FfprobeOutput,
+  redactUrls,
+  toProbeResult,
+} from './media-probe.service';
 
 const h264 = { codec_type: 'video', codec_name: 'h264', width: 640 };
 
@@ -54,5 +58,24 @@ describe('toProbeResult', () => {
         { codec_type: 'audio', codec_name: 'vorbis', width: 0 },
       ]),
     ).toThrow(/no video stream/);
+  });
+});
+
+describe('redactUrls', () => {
+  it('removes presigned URLs and stray query strings from ffmpeg errors', () => {
+    const stderr =
+      'http://minio:9000/bucket/videos/1/original?X-Amz-Credential=key%2F20261115&X-Amz-Signature=abc: Server returned 404 Not Found\n' +
+      "[hls @ 0x1] Error when loading first segment 'https://10.0.0.5/seg.ts?token=1'\n" +
+      'original?X-Amz-Signature=abc: Invalid data found when processing input';
+
+    expect(redactUrls(stderr)).toBe(
+      '<url>: Server returned 404 Not Found\n' +
+        "[hls @ 0x1] Error when loading first segment '<url>'\n" +
+        'original: Invalid data found when processing input',
+    );
+  });
+
+  it('keeps text without URLs as is', () => {
+    expect(redactUrls('moov atom not found')).toBe('moov atom not found');
   });
 });

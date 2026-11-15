@@ -67,6 +67,22 @@ function parseFrameRate(rate: string | undefined): number | null {
   return Math.round((num / den) * 1000) / 1000;
 }
 
+/** Any `scheme://…` URL, without the `:` ffmpeg puts right after it. */
+const URL_PATTERN = /[a-z][a-z0-9+.-]*:\/\/[^\s'"]*?(?=:?\s|['"]|:?$)/gi;
+
+/** A query string left without its URL (e.g. `?X-Amz-Signature=…`). */
+const QUERY_PATTERN = /\?[^\s'"=]*=[^\s'"]*?(?=:?\s|['"]|:?$)/g;
+
+/**
+ * FFmpeg echoes its input in errors; for the worker that is a presigned URL
+ * with the internal storage host, the access key id and the signature. The
+ * error text is stored in `processing_error` and returned to the owner, so
+ * URLs and query strings are removed first.
+ */
+export function redactUrls(text: string): string {
+  return text.replace(URL_PATTERN, '<url>').replace(QUERY_PATTERN, '');
+}
+
 /** ffprobe demuxers of still images, which report a `video` stream. */
 const IMAGE_FORMAT =
   /(^|,)(image2|image2pipe|[a-z0-9]+_pipe|gif|apng|webp)(,|$)/;
@@ -183,7 +199,7 @@ export class MediaProbeService {
           resolve({ stdout: Buffer.concat(out), stderr });
           return;
         }
-        const reason = `${command} failed (${signal ?? `exit ${code}`}): ${stderr.trim().slice(0, 500)}`;
+        const reason = `${command} failed (${signal ?? `exit ${code}`}): ${redactUrls(stderr.trim()).slice(0, 500)}`;
         reject(
           NON_RETRYABLE_STDERR.some((s) => stderr.includes(s))
             ? new NonRetryableProcessingError(reason)

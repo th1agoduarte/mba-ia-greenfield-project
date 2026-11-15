@@ -99,6 +99,20 @@ describe('MediaProbeService (integration — ffmpeg + MinIO)', () => {
     );
   });
 
+  it('keeps the presigned URL (host, key id, signature) out of the error text', async () => {
+    const url = await storage.presignGetObject(`test/${randomUUID()}/missing`, {
+      internal: true,
+    });
+    const { host } = new URL(url);
+
+    const err = (await media.probe(url).catch((e) => e)) as Error;
+
+    expect(err.message).toContain('404');
+    expect(err.message).not.toContain(host);
+    expect(err.message).not.toMatch(/X-Amz-|Signature|Credential/i);
+    expect(err.message).not.toContain(process.env.S3_ACCESS_KEY!);
+  });
+
   it.each([
     ['PNG', 'png'],
     ['JPEG', 'mjpeg'],
