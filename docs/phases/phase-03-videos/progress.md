@@ -1,11 +1,11 @@
 # phase-03-videos — Progress
 
 **Status:** completed
-**SIs:** 9/9 completed
+**SIs:** 10/10 completed
 
 ### SI-03.1 — Infraestrutura: storage, broker, FFmpeg e configuração
 - **Status:** completed
-- **Tests:** 13/13 passing (env.validation.integration-spec.ts)
+- **Tests:** 13/13 passing in `src/config` (env.validation.integration-spec.ts 10 + swagger.config.spec.ts 3)
 - **Observations:** 
   - Official minio/minio and minio/mc images are no longer published; used pgsty/minio and pgsty/mc pinned to dated release tags (library-refs.md).
   - Host ports of MinIO/RabbitMQ are parametrized in compose.yaml (MINIO_API_PORT etc.) because 9000 may be busy on the host; S3_PUBLIC_ENDPOINT must match the published port.
@@ -78,3 +78,18 @@
   - Full e2e run exposed two issues: npm run test:e2e ran suites in parallel on the shared DB (CLAUDE.md already said e2e always runs --runInBand; the script now does), and an AMQP channel setup error emitted while an app was closing had no listener; publisher and consumer now log channel 'error' events.
   - The first 10 GiB smoke attempt failed in the script itself (split wrote 10 GiB into the host /tmp, which has a quota); the script now streams parts with dd and compares the download with cmp, no copies on disk.
   - Added the context7 MCP server to .mcp.json (CLAUDE.md requires it; it was missing from the base repo). During this session Context7 was queried through its public HTTP API.
+
+### SI-03.10 — Amendment: correções do code review e alinhamento plano ↔ código
+- **Status:** completed
+- **Tests:** videos/messaging/media/storage suites 61/61; full DoD re-run below the merge
+- **Observations:**
+  - `/code-review high` over `upstream/main...dev` reported 10 findings; 8 fixed on `bugfix/phase-03-code-review`, 2 kept on purpose.
+  - Fixed: the consumer now nacks (requeue) when forwarding to the retry/dead queue fails, instead of leaving the delivery unsettled (with prefetch 1 that stalled the worker); a missing or malformed `x-attempt` header counts as attempt 1 (NaN looped forever).
+  - Fixed: `completeUpload` publishes only if its conditional update to `processing` affected a row (concurrent calls publish once); the compensation after a failed publish no longer restores the already-completed `upload_id`; `NoSuchUpload` on completion is accepted when the object already exists.
+  - Fixed: an assembled object above 10 GiB is deleted and the call answers `400 UPLOAD_TOO_LARGE` (it answered 202 and kept the object). Added to the plan's Error Catalog and API Contracts.
+  - Fixed: ffprobe without container duration (browser-recorded WebM) falls back to the stream duration or stores null instead of failing as "no video stream"; `avg_frame_rate` `0/0` is stored as null.
+  - Fixed: `messaging.module.spec.ts` and `videos.module.spec.ts` opened a real AMQP connection; renamed to `*.integration-spec.ts` with an isolated queue namespace (project test rules).
+  - Kept: `@SkipThrottle()` on the whole videos controller (user decision in ICC-2); `POST /videos` therefore has no rate limit — follow-up candidate.
+  - Independent audit of the DESAFIO criteria: plain `npm test` failed in parallel (shared DB) → `test` script now runs `--runInBand`; TD-01 got the user's decision rationale; plan synced through this amendment SI (deviations of executed SIs listed in the plan, SIs themselves not rewritten); README/VALIDACAO/CLAUDE.md wording fixed (modules list, `npm test` description, `S3_PUBLIC_ENDPOINT` localhost exception, ESLint test override, Git Flow check).
+  - Known limitation: if the database is down during all 3 attempts, the message is parked in `videos.processing.dead` without marking the video `failed`; recovery is a manual requeue from the dead queue (a reconciliation job is out of this phase's scope).
+

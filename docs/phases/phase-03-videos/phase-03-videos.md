@@ -3,9 +3,9 @@ kind: phase
 name: phase-03-videos
 test_specs_aware: true
 sources_mtime:
-  docs/phases/phase-03-videos/context.md: "2026-11-15T14:19:51-03:00"
-  docs/phases/phase-03-videos/library-refs.md: "2026-11-15T14:19:41-03:00"
-  docs/decisions/technical-decisions-phase-03-videos.md: "2026-11-15T13:49:43-03:00"
+  docs/phases/phase-03-videos/context.md: "2026-11-15T14:31:32-03:00"
+  docs/phases/phase-03-videos/library-refs.md: "2026-11-15T14:31:24-03:00"
+  docs/decisions/technical-decisions-phase-03-videos.md: "2026-11-15T14:31:12-03:00"
   docs/decisions/technical-decisions-openapi-docs-nestjs.md: "2026-11-15T12:38:57-03:00"
 ---
 
@@ -283,6 +283,37 @@ Entregar no `nestjs-project/` o serviço de armazenamento (MinIO/S3) para vídeo
 
 ---
 
+### SI-03.10 — Amendment: correções do code review e alinhamento plano ↔ código
+
+**Description:** Registra o que a implementação mudou em relação aos SIs já executados (que não são reescritos) e as correções do `/code-review` + auditoria independente, para que o plano continue rastreável ao código.
+
+**Technical actions:**
+
+1. Desvios dos SIs executados, todos registrados no `progress.md`: `src/worker.module.spec.ts` → `src/worker.module.integration-spec.ts` (abre conexão real); o e2e de fluxo carrega `VideoProcessingModule` junto do `AppModule` em vez de `WorkerModule` (duas raízes TypeORM no mesmo processo quebram o DataSource); `publishVideoUploaded(videoId)` sem parâmetro `attempt` (o retry republica pelo consumer); `VideosModule` usa `TypeOrmModule.forFeature([Video])` + `ChannelsModule.findByUserId` em vez de `forFeature([Video, Channel])`; configs registradas em `src/config/root.imports.ts` (compartilhado por `AppModule` e `WorkerModule`); `findOwned` → `findOwnedOrFail`/`getVideo`; `amqp-connection-manager` 4.x (TD-11 Revision)
+2. `completeUpload`: publica só quando o update condicional para `processing` afeta a linha; a compensação não restaura `upload_id`; arquivo montado acima de 10 GiB → `failed`, objeto apagado e `400 UPLOAD_TOO_LARGE` (`### Error Catalog`, `### API Contracts`, transição `draft → failed` no `### Data Model`)
+3. Consumer: `nack` com requeue quando o reenvio para retry/dead falha; `x-attempt` ausente ou inválido conta como 1
+4. `MediaProbeService`: sem duração no container (WebM gravado por navegador) usa a duração do stream ou `null`; `avg_frame_rate` `0/0` → `null`; respostas `403`/`404` do storage são não-retryable
+5. `npm test` e `npm run test:e2e` rodam `--runInBand` (banco compartilhado, como o `nestjs-project/CLAUDE.md` determina); `messaging.module` e `videos.module` specs viram `*.integration-spec.ts` (conectam no RabbitMQ)
+
+**Tests:**
+
+| Artifact | Layer | Test file |
+|----------|-------|-----------|
+| `VideoProcessingConsumer` | Unit: `x-attempt` inválido, parking na última tentativa, `nack` quando o reenvio falha | `src/messaging/video-processing.consumer.spec.ts` |
+| `VideosService.completeUpload` | Unit: concorrência, compensação, `UPLOAD_TOO_LARGE` | `src/videos/videos.service.spec.ts` |
+| `MediaProbeService` | Integration: WebM sem duração no container | `src/media/media-probe.service.integration-spec.ts` |
+
+**Dependencies:** SI-03.9 — fase implementada
+
+**Acceptance criteria:**
+
+- `docker compose exec nestjs-api npm test` (sem flags) e `npm run test:e2e` passam
+- Dois `complete` concorrentes publicam no máximo uma mensagem `video.uploaded`
+- `complete` com arquivo montado acima de 10 GiB retorna `400` com `error: "UPLOAD_TOO_LARGE"` e o objeto não existe mais no bucket
+- Uma falha ao reenviar para a fila de retry não deixa a entrega sem ack/nack
+
+---
+
 ## Technical Specifications
 
 ### Data Model
@@ -310,7 +341,7 @@ Table `videos` (per `phase-03-videos/TD-02`, `TD-03`, `TD-07`, `TD-09`).
 | created_at | timestamp | default now() |
 | updated_at | timestamp | default now(), updated on change |
 
-**Relations:** `Channel` has many `Video` (one-to-many); `Video` belongs to one `Channel` (`channel_id`).
+**Relations:** `Video` belongs to one `Channel` (`@ManyToOne`, `channel_id`, ON DELETE CASCADE); no inverse `@OneToMany` is declared on `Channel`.
 **Indexes:** unique on `slug`; index on `channel_id`.
 **Migration:** `src/database/migrations/<timestamp>-CreateVideos.ts` (generated via `npm run migration:generate`).
 
@@ -322,6 +353,7 @@ Table `videos` (per `phase-03-videos/TD-02`, `TD-03`, `TD-07`, `TD-09`).
 | `draft` | `processing` | API | `POST /videos/{slug}/upload/complete` after `CompleteMultipartUpload` succeeds |
 | `processing` | `ready` | Worker | metadata + thumbnail saved (conditional update `WHERE status = 'processing'`) |
 | `processing` | `failed` | Worker | non-retryable error, or last of 3 attempts failed (`processing_error` stored) |
+| `draft` | `failed` | API | `complete` finds the assembled object above 10 GiB (`UPLOAD_TOO_LARGE`) |
 | `draft` | (deleted) | API | `DELETE /videos/{slug}/upload` (multipart aborted) |
 
 #### Storage layout (MinIO/S3)
@@ -423,6 +455,7 @@ Completes the multipart upload, moves the video to `processing` and publishes `v
 **Error responses:**
 - 400 VALIDATION_ERROR: invalid body
 - 400 INVALID_UPLOAD_PARTS: storage rejected the part list (missing part, wrong ETag or order)
+- 400 UPLOAD_TOO_LARGE: the assembled file exceeds 10 GiB (video set to `failed`, object deleted)
 - 404 VIDEO_NOT_FOUND
 - 409 VIDEO_INVALID_STATE: video is `ready` or `failed`
 
@@ -488,6 +521,7 @@ Inherited envelope and `VALIDATION_ERROR` from phase 02. New domain exceptions i
 | VIDEO_NOT_READY | 409 | `stream`/`download` on a video whose status is not `ready` |
 | INVALID_PART_NUMBER | 400 | Requested part number greater than the video's `part_count` |
 | INVALID_UPLOAD_PARTS | 400 | `CompleteMultipartUpload` rejected (`InvalidPart`, `InvalidPartOrder`, `EntityTooSmall`) |
+| UPLOAD_TOO_LARGE | 400 | The assembled object exceeds 10 GiB (part sizes are chosen by the client); the video becomes `failed` and the object is deleted _(added by the code review after SI-03.9)_ |
 
 Worker-side failures are not HTTP errors: they set `status = failed` and `processing_error` (per `phase-03-videos/TD-09`).
 
@@ -532,6 +566,7 @@ SI-03.1 (root) — infra, config, deps
             └── SI-03.7 — depends on SI-03.3 + SI-03.4 + SI-03.6 (mensagens video.uploaded)
                 └── SI-03.8 — depends on SI-03.7 (vídeos ready para stream/download)
                     └── SI-03.9 — depends on SI-03.8 (todas as rotas para OpenAPI/docs/smoke)
+                        └── SI-03.10 — depends on SI-03.9 (amendment pós-review)
 ```
 
 ---
@@ -547,10 +582,11 @@ SI-03.1 (root) — infra, config, deps
 - [ ] SI-03.7 — Video worker: metadados, thumbnail e ciclo de status
 - [ ] SI-03.8 — Detalhe, streaming e download do vídeo
 - [ ] SI-03.9 — Contrato OpenAPI, documentação de IA e smoke do container worker
+- [ ] SI-03.10 — Amendment: correções do code review e alinhamento plano ↔ código
 
 **Full test suites:**
 
-- [ ] Backend tests pass (`cd nestjs-project && docker compose exec nestjs-api npm test -- --runInBand`)
+- [ ] Backend tests pass (`cd nestjs-project && docker compose exec nestjs-api npm test`)
 - [ ] E2E tests pass (`cd nestjs-project && docker compose exec nestjs-api npm run test:e2e`)
 - [ ] Type/compilation checks pass (`cd nestjs-project && docker compose exec nestjs-api npx tsc --noEmit`)
 - [ ] Lint passes (`cd nestjs-project && docker compose exec nestjs-api npm run lint`)

@@ -5,6 +5,7 @@ import { QueryFailedError, Repository } from 'typeorm';
 import { ChannelsService } from '../channels/channels.service';
 import {
   InvalidPartNumberException,
+  UploadTooLargeException,
   VideoInvalidStateException,
   VideoNotFoundException,
   VideoNotReadyException,
@@ -155,9 +156,9 @@ export class VideosService {
   /**
    * Closes the multipart upload, moves the video to `processing` and
    * publishes `video.uploaded` (TD-09, TD-12). Idempotent: a video already in
-   * `processing` is returned as is, without a second message. If publishing
-   * fails, the status is compensated back to `draft` and the call can be
-   * retried.
+   * `processing` is returned as is, without a second message, and only the
+   * call whose conditional update wins publishes. If publishing fails, the
+   * status is compensated back to `draft` and the call can be retried.
    */
   async completeUpload(
     userId: string,
@@ -168,13 +169,14 @@ export class VideosService {
     if (video.status === VideoStatus.PROCESSING) {
       return toVideoSummary(video);
     }
-    if (video.status !== VideoStatus.DRAFT || !video.upload_id) {
+    if (video.status !== VideoStatus.DRAFT) {
       throw new VideoInvalidStateException(video.status);
     }
 
-    // A previous attempt may have assembled the object before failing to publish.
+    // A previous attempt may have assembled the object before failing to
+    // publish (its compensation clears upload_id).
     let head = await this.storageService.headObject(video.storage_key);
-    if (!head) {
+    if (!head && video.upload_id) {
       await this.storageService.completeMultipartUpload(
         video.storage_key,
         video.upload_id,
@@ -182,39 +184,47 @@ export class VideosService {
       );
       head = await this.storageService.headObject(video.storage_key);
     }
+    if (!head) {
+      throw new VideoInvalidStateException(video.status);
+    }
 
     // Part sizes are chosen by the client: enforce the 10 GiB cap on the result.
-    const actualSize = head?.contentLength ?? video.size_bytes;
-    if (actualSize > VIDEO_UPLOAD.MAX_SIZE_BYTES) {
+    if (head.contentLength > VIDEO_UPLOAD.MAX_SIZE_BYTES) {
       await this.videoRepository.update(
-        { id: video.id },
+        { id: video.id, status: VideoStatus.DRAFT },
         {
           status: VideoStatus.FAILED,
           upload_id: null,
-          size_bytes: actualSize,
+          size_bytes: head.contentLength,
           processing_error: OVERSIZED_UPLOAD_ERROR,
         },
       );
-      return { ...toVideoSummary(video), status: VideoStatus.FAILED };
+      await this.storageService.deleteObject(video.storage_key);
+      throw new UploadTooLargeException();
     }
 
     // Commit `processing` BEFORE publishing: the worker ignores videos that
     // are not in `processing`, so it must never see the message first.
-    await this.videoRepository.update(
+    const { affected } = await this.videoRepository.update(
       { id: video.id, status: VideoStatus.DRAFT },
       {
         status: VideoStatus.PROCESSING,
         upload_id: null,
-        size_bytes: actualSize,
+        size_bytes: head.contentLength,
       },
     );
+    if (!affected) {
+      // A concurrent call moved it first and owns the publish.
+      return toVideoSummary(await this.findOwnedOrFail(userId, slug));
+    }
     try {
       await this.publisher.publishVideoUploaded(video.id);
     } catch (err) {
-      // Compensation: back to draft so the client can retry the call.
+      // Compensation: back to draft so the client can retry the call. The
+      // multipart upload is already completed, so upload_id stays null.
       await this.videoRepository.update(
         { id: video.id, status: VideoStatus.PROCESSING },
-        { status: VideoStatus.DRAFT, upload_id: video.upload_id },
+        { status: VideoStatus.DRAFT },
       );
       throw err;
     }

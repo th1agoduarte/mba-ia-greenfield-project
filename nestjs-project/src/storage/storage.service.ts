@@ -4,6 +4,7 @@ import {
   AbortMultipartUploadCommand,
   CompleteMultipartUploadCommand,
   CreateMultipartUploadCommand,
+  DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
   ListPartsCommand,
@@ -17,6 +18,7 @@ import storageConfig from '../config/storage.config';
 import { InvalidUploadPartsException } from '../common/exceptions/domain.exception';
 import {
   S3_INVALID_PARTS_ERRORS,
+  S3_NO_SUCH_UPLOAD_ERRORS,
   S3_NOT_FOUND_ERRORS,
 } from './storage.constants';
 import type {
@@ -138,8 +140,21 @@ export class StorageService {
       if (hasErrorName(err, S3_INVALID_PARTS_ERRORS)) {
         throw new InvalidUploadPartsException();
       }
+      // A concurrent call already completed this upload: the object exists.
+      if (
+        hasErrorName(err, S3_NO_SUCH_UPLOAD_ERRORS) &&
+        (await this.headObject(key))
+      ) {
+        return;
+      }
       throw err;
     }
+  }
+
+  async deleteObject(key: string): Promise<void> {
+    await this.client.send(
+      new DeleteObjectCommand({ Bucket: this.bucket, Key: key }),
+    );
   }
 
   async abortMultipartUpload(key: string, uploadId: string): Promise<void> {

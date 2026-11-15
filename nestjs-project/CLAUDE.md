@@ -75,7 +75,7 @@ npm run start:worker:dev                 # Video worker (normally run by the vid
 npm run start:worker                     # Compiled worker (dist/worker.js)
 npm run openapi:export                   # Regenerate openapi.json (commit it after API changes)
 
-npm test                                 # Unit tests
+npm test                                 # Unit + integration tests (--runInBand)
 npm run test:watch                       # Unit tests in watch mode
 npm run test:cov                         # Coverage report
 npm run test:e2e                         # End-to-end tests (always with --runInBand)
@@ -101,11 +101,11 @@ scripts/smoke-video-pipeline.sh [file]      # full pipeline from the host, throu
 
 ### Test execution
 
-Integration and e2e suites share a single test database. They **must** be run with `--runInBand`:
+Integration and e2e suites share a single test database. They **must** run in band — both scripts already pass `--runInBand`:
 
 ```bash
-docker compose exec nestjs-api npm test -- --runInBand
-docker compose exec nestjs-api npm run test:e2e   # already configured
+docker compose exec nestjs-api npm test
+docker compose exec nestjs-api npm run test:e2e
 ```
 
 Parallel execution causes FK violations, deadlocks, and cross-suite contamination because suites truncate or seed shared tables concurrently.
@@ -197,7 +197,7 @@ Endpoints (all `Authorization: Bearer`, contract in `openapi.json`):
 | `POST /videos` | `201` draft + `upload { part_size: 67108864, part_count, max_urls_per_request: 100 }`; `file_size` ≤ 10737418240 |
 | `POST /videos/{slug}/upload/part-urls` | `200` presigned `PUT` URLs (1 h) for ≤ 100 parts |
 | `GET /videos/{slug}/upload/parts` | `200` parts already stored (resume) |
-| `POST /videos/{slug}/upload/complete` | `202` `processing` + `video.uploaded` published (idempotent; compensates to `draft` if publishing fails) |
+| `POST /videos/{slug}/upload/complete` | `202` `processing` + `video.uploaded` published (idempotent; compensates to `draft` if publishing fails); `400 UPLOAD_TOO_LARGE` (video `failed`, object deleted) if the assembled file exceeds 10 GiB |
 | `DELETE /videos/{slug}/upload` | `204` multipart aborted, draft removed |
 | `GET /videos/{slug}` | `200` status, duration, metadata, presigned `thumbnail_url` |
 | `GET /videos/{slug}/stream` | `302` to presigned GET (storage answers `Range` with `206`); `409 VIDEO_NOT_READY` unless `ready` |
@@ -217,7 +217,7 @@ Storage keys: `videos/{id}/original`, `videos/{id}/thumbnail.jpg` in the private
 - **TypeScript:** `nodenext` module resolution, `ES2023` target, `strictNullChecks` on, `noImplicitAny` off
 - **Decorators:** `emitDecoratorMetadata` + `experimentalDecorators` enabled — required for NestJS DI
 - **Prettier:** single quotes, trailing commas everywhere
-- **ESLint:** `no-explicit-any` allowed; `no-floating-promises` and `no-unsafe-argument` are warnings
+- **ESLint:** `no-explicit-any` allowed; `no-floating-promises` and `no-unsafe-argument` are warnings. In test files (`*.spec.ts`, `*.integration-spec.ts`, `*.e2e-spec.ts`) the `no-unsafe-*` rules and `unbound-method` are off (Jest mocks and supertest bodies are `any` by design) — see `eslint.config.mjs`
 
 ## REST Conventions
 
