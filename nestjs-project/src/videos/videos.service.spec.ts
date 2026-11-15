@@ -4,6 +4,7 @@ import { QueryFailedError } from 'typeorm';
 import { ChannelsService } from '../channels/channels.service';
 import {
   InvalidPartNumberException,
+  UploadTooLargeException,
   VideoInvalidStateException,
   VideoNotFoundException,
   VideoNotReadyException,
@@ -168,12 +169,14 @@ describe('VideosService.completeUpload', () => {
   const storageService = {
     headObject: jest.fn(),
     completeMultipartUpload: jest.fn(),
+    deleteObject: jest.fn(),
   };
   const publisher = { publishVideoUploaded: jest.fn() };
   const parts = [{ part_number: 1, etag: '"e1"' }];
 
   beforeEach(async () => {
     jest.clearAllMocks();
+    videoRepository.update.mockResolvedValue({ affected: 1 });
     const module = await Test.createTestingModule({
       providers: [
         VideosService,
@@ -226,7 +229,7 @@ describe('VideosService.completeUpload', () => {
       ],
       [
         { id: 'video-id', status: VideoStatus.PROCESSING },
-        { status: VideoStatus.DRAFT, upload_id: 'upload-1' },
+        { status: VideoStatus.DRAFT },
       ],
     ]);
   });
@@ -268,24 +271,60 @@ describe('VideosService.completeUpload', () => {
     expect(publisher.publishVideoUploaded).toHaveBeenCalledTimes(1);
   });
 
-  it('marks an assembled file above 10 GiB as failed without publishing', async () => {
+  it('rejects an assembled file above 10 GiB: failed, object deleted, UPLOAD_TOO_LARGE', async () => {
     videoRepository.findOne.mockResolvedValue(draft());
     storageService.headObject.mockResolvedValue({
       contentLength: 10737418241,
       contentType: 'video/mp4',
     });
 
-    const result = await service.completeUpload('user-1', 'slug', parts);
+    await expect(
+      service.completeUpload('user-1', 'slug', parts),
+    ).rejects.toBeInstanceOf(UploadTooLargeException);
 
-    expect(result.status).toBe(VideoStatus.FAILED);
     expect(videoRepository.update).toHaveBeenCalledWith(
-      { id: 'video-id' },
+      { id: 'video-id', status: VideoStatus.DRAFT },
       expect.objectContaining({
         status: VideoStatus.FAILED,
         processing_error: OVERSIZED_UPLOAD_ERROR,
       }),
     );
+    expect(storageService.deleteObject).toHaveBeenCalledWith(
+      'videos/video-id/original',
+    );
     expect(publisher.publishVideoUploaded).not.toHaveBeenCalled();
+  });
+
+  it('does not publish when a concurrent call already moved the video to processing', async () => {
+    videoRepository.findOne
+      .mockResolvedValueOnce(draft())
+      .mockResolvedValueOnce(
+        draft({ status: VideoStatus.PROCESSING, upload_id: null }),
+      );
+    storageService.headObject.mockResolvedValue({
+      contentLength: 2048,
+      contentType: 'video/mp4',
+    });
+    videoRepository.update.mockResolvedValueOnce({ affected: 0 });
+
+    const result = await service.completeUpload('user-1', 'slug', parts);
+
+    expect(result.status).toBe(VideoStatus.PROCESSING);
+    expect(publisher.publishVideoUploaded).not.toHaveBeenCalled();
+  });
+
+  it('retries a compensated draft (upload_id cleared) without completing the multipart again', async () => {
+    videoRepository.findOne.mockResolvedValue(draft({ upload_id: null }));
+    storageService.headObject.mockResolvedValue({
+      contentLength: 2048,
+      contentType: 'video/mp4',
+    });
+
+    const result = await service.completeUpload('user-1', 'slug', parts);
+
+    expect(result.status).toBe(VideoStatus.PROCESSING);
+    expect(storageService.completeMultipartUpload).not.toHaveBeenCalled();
+    expect(publisher.publishVideoUploaded).toHaveBeenCalledWith('video-id');
   });
 });
 

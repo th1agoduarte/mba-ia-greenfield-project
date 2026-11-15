@@ -1,12 +1,18 @@
 import { Test } from '@nestjs/testing';
 import { ConfigModule } from '@nestjs/config';
 import messagingConfig from '../config/messaging.config';
+import {
+  deleteQueueNamespace,
+  useIsolatedQueueNamespaceForTests,
+} from '../test/messaging';
 import { MessagingModule } from './messaging.module';
 import { VideoProcessingConsumer } from './video-processing.consumer';
 import { VideoProcessingPublisher } from './video-processing.publisher';
 
-describe('MessagingModule', () => {
+describe('MessagingModule (integration)', () => {
   it('compiles and provides the publisher and the consumer', async () => {
+    // Compiling opens the AMQP connection and declares the topology.
+    const namespace = useIsolatedQueueNamespaceForTests('module');
     const module = await Test.createTestingModule({
       imports: [
         ConfigModule.forRoot({ isGlobal: true, load: [messagingConfig] }),
@@ -17,5 +23,6 @@ describe('MessagingModule', () => {
     expect(module.get(VideoProcessingPublisher)).toBeDefined();
     expect(module.get(VideoProcessingConsumer)).toBeDefined();
     await module.close();
+    await deleteQueueNamespace(namespace);
   });
 });

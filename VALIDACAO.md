@@ -42,9 +42,9 @@ Esperado: `docker compose ps` com `db`, `mailpit`, `minio`, `rabbitmq` saudávei
 |---|----------|----------------|----------|
 | 3.1 | Storage, fila e worker no Compose | `docker compose ps` e `docker compose logs video-worker \| grep Consuming` | `minio`, `minio-init`, `rabbitmq`, `video-worker` sobem com `docker compose up -d`; worker loga `Consuming videos.processing` |
 | 3.2 | Migration e entidade ligada ao canal | `ls nestjs-project/src/database/migrations/*CreateVideos*` e `docker compose exec db psql -U streamtube -c '\d videos'` | tabela `videos` com FK `channel_id → channels(id) ON DELETE CASCADE`, `slug` único, enum de status |
-| 3.3 | Testes verdes | `docker compose exec nestjs-api npm test -- --runInBand` e `docker compose exec nestjs-api npm run test:e2e` | todas as suítes passam (números em `docs/evidencias/`) |
+| 3.3 | Testes verdes | `docker compose exec nestjs-api npm test` e `docker compose exec nestjs-api npm run test:e2e` (ambos já rodam em band) | todas as suítes passam (números em `docs/evidencias/`) |
 | 3.4 | Definition of Done | `docker compose exec nestjs-api npx tsc --noEmit; echo $?` e `docker compose exec nestjs-api npm run lint` | `0` e lint sem erros |
-| 3.5 | Git Flow | `git log --oneline --graph main..dev` e `git log --format='%h %s' main -1` | trabalho em `feature/phase-03-videos` (e `bugfix/baseline-test-and-lint`) mergeado em `dev`; `main` sem commits novos |
+| 3.5 | Git Flow | `git log --first-parent --no-merges upstream/main..main` e `git log --oneline --graph upstream/main..main` | primeiro comando vazio (nenhum commit direto na `main`); `main` só recebe merges `--no-ff` de `dev`, que recebe as branches `feature/phase-03-videos` e `bugfix/*` |
 
 **Checagem negativa dos testes:** os testes falham quando o comportamento quebra. Exemplo: troque `VIDEO_UPLOAD.MAX_SIZE_BYTES` em `src/videos/videos.constants.ts` para `5 * 1024 ** 3` e rode `npx jest --config ./test/jest-e2e.json test/videos.e2e-spec.ts -t "10 GiB"` → falha (`expected 201, got 400`). Desfaça com `git checkout src/videos/videos.constants.ts`.
 

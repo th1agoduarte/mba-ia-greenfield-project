@@ -1,3 +1,4 @@
+import { execFileSync } from 'child_process';
 import { randomUUID } from 'crypto';
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigModule } from '@nestjs/config';
@@ -96,5 +97,38 @@ describe('MediaProbeService (integration — ffmpeg + MinIO)', () => {
     await expect(media.probe(url)).rejects.toBeInstanceOf(
       NonRetryableProcessingError,
     );
+  });
+
+  it('accepts a WebM without container duration (browser recording style)', async () => {
+    // Writing WebM to a pipe leaves no duration in the header, like MediaRecorder output.
+    const webm = execFileSync(
+      'ffmpeg',
+      [
+        '-v',
+        'error',
+        '-f',
+        'lavfi',
+        '-i',
+        'testsrc=duration=1:size=320x240:rate=10',
+        '-c:v',
+        'libvpx',
+        '-deadline',
+        'realtime',
+        '-f',
+        'webm',
+        'pipe:1',
+      ],
+      { maxBuffer: 10 * 1024 * 1024 },
+    );
+    const url = await presignedSample(webm);
+
+    const result = await media.probe(url);
+
+    expect(result.metadata.video_codec).toBe('vp8');
+    expect(
+      result.duration_seconds === null || result.duration_seconds > 0,
+    ).toBe(true);
+    const frame = await media.extractFrame(url, 0);
+    expect(frame.subarray(0, 2)).toEqual(Buffer.from([0xff, 0xd8]));
   });
 });

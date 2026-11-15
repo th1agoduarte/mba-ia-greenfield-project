@@ -6,3 +6,5 @@ export const S3_INVALID_PARTS_ERRORS = [
 ] as const;
 
 export const S3_NOT_FOUND_ERRORS = ['NotFound', 'NoSuchKey'] as const;
+
+export const S3_NO_SUCH_UPLOAD_ERRORS = ['NoSuchUpload'] as const;

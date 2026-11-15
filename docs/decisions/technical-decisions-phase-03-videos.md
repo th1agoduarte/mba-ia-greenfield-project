@@ -46,6 +46,8 @@ _Research sources:_ Context7 (`/nestjs/docs.nestjs.com` queues recipe, `/taskfor
 
 **Decision:** C (RabbitMQ) — chosen over the recommendation. Consequence for the rest of the phase: retries with backoff, terminal failure and duplicate-safe processing are not built in and must be specified (exchange/queue/dead-letter topology, retry policy, idempotent consumer) together with the Node client library.
 
+**Decision rationale (user):** RabbitMQ was chosen over the BullMQ recommendation for four reasons: (1) it is a market-standard, language-agnostic AMQP broker, so a future worker in another stack can consume the same queue; (2) dead-lettering, per-queue TTL, durable queues, publisher confirms and a management UI are native broker features instead of a job library on top of Redis; (3) it keeps Redis free for caching in later phases instead of making it the queue; (4) the challenge is also an opportunity to practise AMQP messaging. The cost accepted with it — building retries/backoff and idempotency in the application — is covered by TD-11 and TD-12.
+
 ---
 
 ## TD-02: Upload Strategy for Files up to 10 GB
