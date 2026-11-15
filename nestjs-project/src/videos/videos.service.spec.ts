@@ -3,6 +3,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { QueryFailedError } from 'typeorm';
 import { ChannelsService } from '../channels/channels.service';
 import {
+  ChannelNotFoundException,
   InvalidPartNumberException,
   UploadTooLargeException,
   VideoInvalidStateException,
@@ -116,6 +117,31 @@ describe('VideosService', () => {
         expect.stringMatching(/^videos\/.+\/original$/),
         'upload-1',
       );
+    });
+
+    it('keeps the original error when the compensating abort also fails', async () => {
+      videoRepository.save.mockRejectedValue(new Error('db down'));
+      storageService.abortMultipartUpload.mockRejectedValueOnce(
+        new Error('storage down'),
+      );
+
+      await expect(service.initiateUpload('user-1', dto)).rejects.toThrow(
+        'db down',
+      );
+      expect(storageService.abortMultipartUpload).toHaveBeenCalled();
+    });
+
+    it('throws CHANNEL_NOT_FOUND (404) when the user has no channel', async () => {
+      channelsService.findByUserId.mockResolvedValue(null);
+
+      const err = await service.initiateUpload('user-1', dto).catch((e) => e);
+
+      expect(err).toBeInstanceOf(ChannelNotFoundException);
+      expect(err).toMatchObject({
+        errorCode: 'CHANNEL_NOT_FOUND',
+        httpStatus: 404,
+      });
+      expect(storageService.createMultipartUpload).not.toHaveBeenCalled();
     });
   });
 

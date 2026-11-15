@@ -1,7 +1,9 @@
 import { randomBytes } from 'crypto';
+import { JwtService } from '@nestjs/jwt';
 import request from 'supertest';
 import { cleanAllTables } from '../src/test/create-test-data-source';
 import { deleteQueueNamespace } from '../src/test/messaging';
+import { User } from '../src/users/entities/user.entity';
 import {
   createUserWithToken,
   createVideosE2EApp,
@@ -100,6 +102,24 @@ describe('Videos (e2e)', () => {
 
     it('requires authentication', async () => {
       await http().post('/videos').send(validBody).expect(401);
+    });
+
+    it('answers 404 CHANNEL_NOT_FOUND to a user without a channel', async () => {
+      const email = `nochannel_${randomBytes(4).toString('hex')}@example.com`;
+      const user = await ctx.dataSource
+        .getRepository(User)
+        .save({ email, password: 'not-used', is_confirmed: true });
+      const noChannelToken = ctx.module
+        .get(JwtService)
+        .sign({ sub: user.id, email });
+
+      const res = await http()
+        .post('/videos')
+        .set('Authorization', `Bearer ${noChannelToken}`)
+        .send(validBody)
+        .expect(404);
+
+      expect(res.body.error).toBe('CHANNEL_NOT_FOUND');
     });
 
     it('gives two videos different slugs', async () => {

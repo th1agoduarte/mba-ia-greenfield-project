@@ -63,6 +63,11 @@ export class VideosController {
     type: InitiatedUploadDto,
   })
   @ApiResponse({ status: 400, description: 'Validation failed', schema: ERROR })
+  @ApiResponse({
+    status: 404,
+    description: 'The authenticated user has no channel',
+    schema: ERROR,
+  })
   initiate(
     @CurrentUser() user: JwtPayload,
     @Body() dto: CreateVideoDto,

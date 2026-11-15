@@ -100,3 +100,13 @@ export class UploadTooLargeException extends DomainException {
     );
   }
 }
+
+export class ChannelNotFoundException extends DomainException {
+  constructor() {
+    super(
+      'CHANNEL_NOT_FOUND',
+      404,
+      'The authenticated user has no channel to own the video',
+    );
+  }
+}

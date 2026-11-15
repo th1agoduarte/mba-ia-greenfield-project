@@ -1,9 +1,10 @@
 import { randomBytes, randomUUID } from 'crypto';
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { QueryFailedError, Repository } from 'typeorm';
 import { ChannelsService } from '../channels/channels.service';
 import {
+  ChannelNotFoundException,
   InvalidPartNumberException,
   UploadTooLargeException,
   VideoInvalidStateException,
@@ -53,6 +54,8 @@ export function partCountFor(sizeBytes: number): number {
 
 @Injectable()
 export class VideosService {
+  private readonly logger = new Logger(VideosService.name);
+
   constructor(
     @InjectRepository(Video)
     private readonly videoRepository: Repository<Video>,
@@ -71,7 +74,7 @@ export class VideosService {
   ): Promise<InitiatedUploadDto> {
     const channel = await this.channelsService.findByUserId(userId);
     if (!channel) {
-      throw new Error(`User ${userId} has no channel`);
+      throw new ChannelNotFoundException();
     }
 
     const id = randomUUID();
@@ -102,8 +105,16 @@ export class VideosService {
         },
       };
     } catch (err) {
-      // Compensation: do not leave an orphan multipart upload behind.
-      await this.storageService.abortMultipartUpload(storageKey, uploadId);
+      // Compensation: do not leave an orphan multipart upload behind. A failed
+      // abort is only logged (MinIO expires stale uploads), so the original
+      // error is the one the caller sees.
+      try {
+        await this.storageService.abortMultipartUpload(storageKey, uploadId);
+      } catch (abortErr) {
+        this.logger.error(
+          `Could not abort multipart upload ${uploadId} of ${storageKey}: ${(abortErr as Error).message}`,
+        );
+      }
       throw err;
     }
   }
