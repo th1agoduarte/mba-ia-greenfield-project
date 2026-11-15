@@ -47,11 +47,11 @@ describe('StorageService (integration — MinIO)', () => {
     const uploadId = await storage.createMultipartUpload(key, 'video/mp4');
 
     const etag1 = await putPart(
-      await storage.presignUploadPart(key, uploadId, 1),
+      await storage.presignUploadPart(key, uploadId, 1, part1.length),
       part1,
     );
     const etag2 = await putPart(
-      await storage.presignUploadPart(key, uploadId, 2),
+      await storage.presignUploadPart(key, uploadId, 2, part2.length),
       part2,
     );
 
@@ -67,6 +67,31 @@ describe('StorageService (integration — MinIO)', () => {
     const head = await storage.headObject(key);
     expect(head?.contentLength).toBe(FIVE_MIB + 1024);
     expect(head?.contentType).toBe('video/mp4');
+  });
+
+  it('signs the part size: the storage refuses a PUT larger or smaller than signed', async () => {
+    const key = newKey();
+    const uploadId = await storage.createMultipartUpload(key, 'video/mp4');
+    const url = await storage.presignUploadPart(key, uploadId, 1, 1024);
+    expect(new URL(url).searchParams.get('X-Amz-SignedHeaders')).toContain(
+      'content-length',
+    );
+
+    for (const size of [1025, 1023]) {
+      const res = await fetch(url, {
+        method: 'PUT',
+        body: new Uint8Array(randomBytes(size)),
+      });
+      expect(res.status).toBe(403);
+      expect(await res.text()).toContain('SignatureDoesNotMatch');
+    }
+    expect(await storage.listParts(key, uploadId)).toEqual([]);
+
+    await putPart(url, randomBytes(1024));
+    expect(await storage.listParts(key, uploadId)).toMatchObject([
+      { part_number: 1, size: 1024 },
+    ]);
+    await storage.abortMultipartUpload(key, uploadId);
   });
 
   it('serves a presigned GET with Range as 206 Partial Content', async () => {
@@ -104,7 +129,7 @@ describe('StorageService (integration — MinIO)', () => {
     const key = newKey();
     const uploadId = await storage.createMultipartUpload(key, 'video/mp4');
     await putPart(
-      await storage.presignUploadPart(key, uploadId, 1),
+      await storage.presignUploadPart(key, uploadId, 1, 10),
       randomBytes(10),
     );
 

@@ -75,10 +75,16 @@ export class StorageService {
     return UploadId;
   }
 
+  /**
+   * Signs a part PUT for exactly `contentLength` bytes: `content-length` is a
+   * signed header, so the storage rejects a body of any other size
+   * (SignatureDoesNotMatch) and a client cannot push oversized parts.
+   */
   async presignUploadPart(
     key: string,
     uploadId: string,
     partNumber: number,
+    contentLength: number,
   ): Promise<string> {
     return getSignedUrl(
       this.publicClient,
@@ -87,8 +93,12 @@ export class StorageService {
         Key: key,
         UploadId: uploadId,
         PartNumber: partNumber,
+        ContentLength: contentLength,
       }),
-      { expiresIn: this.presignExpiresSeconds },
+      {
+        expiresIn: this.presignExpiresSeconds,
+        signableHeaders: new Set(['content-length']),
+      },
     );
   }
 

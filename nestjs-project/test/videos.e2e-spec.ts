@@ -131,7 +131,11 @@ describe('Videos (e2e)', () => {
 
   describe('upload parts', () => {
     it('signs part URLs on the storage, lists stored parts and resumes', async () => {
-      const { slug } = await createDraft();
+      // Two parts: 64 MiB + 1 KiB (each URL is signed for its exact size).
+      const { slug } = await createDraft({
+        ...validBody,
+        file_size: 64 * 1024 * 1024 + 1024,
+      });
 
       const urls = await http()
         .post(`/videos/${slug}/upload/part-urls`)
@@ -144,13 +148,13 @@ describe('Videos (e2e)', () => {
       expect(url1.host).toBe(new URL(process.env.S3_ENDPOINT!).host);
       expect(url1.searchParams.get('partNumber')).toBe('1');
 
-      const etag = await putPart(urls.body.urls[0].url, randomBytes(1024));
+      const etag = await putPart(urls.body.urls[1].url, randomBytes(1024));
 
       const parts = await http()
         .get(`/videos/${slug}/upload/parts`)
         .set('Authorization', `Bearer ${token}`)
         .expect(200);
-      expect(parts.body.parts).toEqual([{ part_number: 1, etag, size: 1024 }]);
+      expect(parts.body.parts).toEqual([{ part_number: 2, etag, size: 1024 }]);
     });
 
     it('rejects a part number beyond the part count', async () => {
@@ -212,7 +216,7 @@ describe('Videos (e2e)', () => {
 
   describe('POST /videos/:slug/upload/complete', () => {
     async function uploadedDraft() {
-      const { slug, id } = await createDraft();
+      const { slug, id } = await createDraft({ ...validBody, file_size: 4096 });
       const urls = await http()
         .post(`/videos/${slug}/upload/part-urls`)
         .set('Authorization', `Bearer ${token}`)

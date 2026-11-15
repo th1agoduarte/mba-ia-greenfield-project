@@ -16,6 +16,7 @@ import { Video, VideoStatus } from './entities/video.entity';
 import {
   OVERSIZED_UPLOAD_ERROR,
   partCountFor,
+  partSizeFor,
   VideosService,
 } from './videos.service';
 
@@ -74,6 +75,19 @@ describe('VideosService', () => {
       expect(partCountFor(10 * 1024 ** 3)).toBe(160);
       expect(partCountFor(64 * 1024 ** 2 + 1)).toBe(2);
       expect(partCountFor(1)).toBe(1);
+    });
+  });
+
+  describe('partSizeFor', () => {
+    it('gives 64 MiB to every part but the last, which carries the remainder', () => {
+      const size = 150 * 1024 ** 2; // 3 parts: 64 + 64 + 22 MiB
+      expect([1, 2, 3].map((n) => partSizeFor(size, n))).toEqual([
+        64 * 1024 ** 2,
+        64 * 1024 ** 2,
+        22 * 1024 ** 2,
+      ]);
+      expect(partSizeFor(10 * 1024 ** 3, 160)).toBe(64 * 1024 ** 2);
+      expect(partSizeFor(1, 1)).toBe(1);
     });
   });
 
@@ -170,13 +184,18 @@ describe('VideosService', () => {
       expect(storageService.presignUploadPart).not.toHaveBeenCalled();
     });
 
-    it('signs one URL per requested part', async () => {
+    it('signs one URL per requested part, for the exact part size', async () => {
       videoRepository.findOne.mockResolvedValue(draft());
       storageService.presignUploadPart.mockImplementation(
         (_k: string, _u: string, n: number) => Promise.resolve(`url-${n}`),
       );
 
       const result = await service.presignParts('user-1', 'slug', [1, 3]);
+
+      expect(storageService.presignUploadPart.mock.calls).toEqual([
+        ['videos/video-id/original', 'upload-1', 1, 64 * 1024 ** 2],
+        ['videos/video-id/original', 'upload-1', 3, 22 * 1024 ** 2],
+      ]);
 
       expect(result).toEqual({
         urls: [

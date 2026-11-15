@@ -52,6 +52,14 @@ export function partCountFor(sizeBytes: number): number {
   return Math.ceil(sizeBytes / VIDEO_UPLOAD.PART_SIZE_BYTES);
 }
 
+/** Exact size of a part: 64 MiB, the last one carries the remainder. */
+export function partSizeFor(sizeBytes: number, partNumber: number): number {
+  const lastPart = partCountFor(sizeBytes);
+  return partNumber < lastPart
+    ? VIDEO_UPLOAD.PART_SIZE_BYTES
+    : sizeBytes - (lastPart - 1) * VIDEO_UPLOAD.PART_SIZE_BYTES;
+}
+
 @Injectable()
 export class VideosService {
   private readonly logger = new Logger(VideosService.name);
@@ -136,6 +144,7 @@ export class VideosService {
           video.storage_key,
           video.upload_id!,
           partNumber,
+          partSizeFor(video.size_bytes, partNumber),
         ),
       })),
     );
@@ -204,7 +213,8 @@ export class VideosService {
       throw new VideoInvalidStateException(video.status);
     }
 
-    // Part sizes are chosen by the client: enforce the 10 GiB cap on the result.
+    // Part URLs are signed for exact sizes; the cap on the assembled object is
+    // kept as a second line of defence.
     if (head.contentLength > VIDEO_UPLOAD.MAX_SIZE_BYTES) {
       await this.videoRepository.update(
         { id: video.id, status: VideoStatus.DRAFT },
