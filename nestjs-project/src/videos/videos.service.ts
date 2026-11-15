@@ -155,10 +155,14 @@ export class VideosService {
 
   /**
    * Closes the multipart upload, moves the video to `processing` and
-   * publishes `video.uploaded` (TD-09, TD-12). Idempotent: a video already in
-   * `processing` is returned as is, without a second message, and only the
-   * call whose conditional update wins publishes. If publishing fails, the
-   * status is compensated back to `draft` and the call can be retried.
+   * publishes `video.uploaded` (TD-09, TD-12). Repeatable: calling it again
+   * while `processing` republishes the message, so a call that committed
+   * `processing` but died before publishing (or a message parked in the dead
+   * queue) can be recovered by the client; duplicates are harmless because the
+   * worker skips videos that are no longer `processing`. Among concurrent
+   * calls on a draft, only the one whose conditional update wins publishes.
+   * If publishing fails, the status is compensated back to `draft` and the
+   * call can be retried.
    */
   async completeUpload(
     userId: string,
@@ -167,6 +171,7 @@ export class VideosService {
   ): Promise<VideoSummaryDto> {
     const video = await this.findOwnedOrFail(userId, slug);
     if (video.status === VideoStatus.PROCESSING) {
+      await this.publisher.publishVideoUploaded(video.id);
       return toVideoSummary(video);
     }
     if (video.status !== VideoStatus.DRAFT) {

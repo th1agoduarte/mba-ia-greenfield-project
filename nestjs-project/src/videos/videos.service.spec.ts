@@ -234,7 +234,8 @@ describe('VideosService.completeUpload', () => {
     ]);
   });
 
-  it('is idempotent while processing: returns without publishing again', async () => {
+  it('is repeatable while processing: republishes the job without touching the storage or the status', async () => {
+    // e.g. a previous call committed `processing` and died before publishing
     videoRepository.findOne.mockResolvedValue(
       draft({ status: VideoStatus.PROCESSING, upload_id: null }),
     );
@@ -243,7 +244,8 @@ describe('VideosService.completeUpload', () => {
 
     expect(result.status).toBe(VideoStatus.PROCESSING);
     expect(storageService.completeMultipartUpload).not.toHaveBeenCalled();
-    expect(publisher.publishVideoUploaded).not.toHaveBeenCalled();
+    expect(videoRepository.update).not.toHaveBeenCalled();
+    expect(publisher.publishVideoUploaded).toHaveBeenCalledWith('video-id');
   });
 
   it.each([VideoStatus.READY, VideoStatus.FAILED])(
