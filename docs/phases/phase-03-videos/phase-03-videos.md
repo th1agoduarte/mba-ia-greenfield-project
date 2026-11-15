@@ -3,9 +3,9 @@ kind: phase
 name: phase-03-videos
 test_specs_aware: true
 sources_mtime:
-  docs/phases/phase-03-videos/context.md: "2026-11-15T13:28:00-03:00"
-  docs/phases/phase-03-videos/library-refs.md: "2026-11-15T13:27:53-03:00"
-  docs/decisions/technical-decisions-phase-03-videos.md: "2026-11-15T13:27:49-03:00"
+  docs/phases/phase-03-videos/context.md: "2026-11-15T14:19:51-03:00"
+  docs/phases/phase-03-videos/library-refs.md: "2026-11-15T14:19:41-03:00"
+  docs/decisions/technical-decisions-phase-03-videos.md: "2026-11-15T13:49:43-03:00"
   docs/decisions/technical-decisions-openapi-docs-nestjs.md: "2026-11-15T12:38:57-03:00"
 ---
 

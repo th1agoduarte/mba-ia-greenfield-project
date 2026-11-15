@@ -2,16 +2,16 @@
 kind: phase
 name: phase-03-videos
 sources_mtime:
-  docs/phases/phase-03-videos/library-refs.md: "2026-11-15T13:27:53-03:00"
+  docs/phases/phase-03-videos/library-refs.md: "2026-11-15T14:19:41-03:00"
   docs/project-plan.md: "2026-11-15T12:38:57-03:00"
-  docs/decisions/technical-decisions-phase-03-videos.md: "2026-11-15T13:27:49-03:00"
+  docs/decisions/technical-decisions-phase-03-videos.md: "2026-11-15T13:49:43-03:00"
   docs/decisions/technical-decisions-openapi-docs-nestjs.md: "2026-11-15T12:38:57-03:00"
   docs/decisions/technical-decisions-next-frontend-openapi-typing.md: "2026-11-15T12:38:57-03:00"
   docs/decisions/technical-decisions-next-frontend-config-base.md: "2026-11-15T12:38:57-03:00"
   docs/decisions/technical-decisions-next-frontend-msw-foundation.md: "2026-11-15T12:38:57-03:00"
   docs/phases/phase-01-configuracao-base/context.md: "2026-11-15T12:38:57-03:00"
   docs/phases/phase-02-auth/context.md: "2026-11-15T12:38:57-03:00"
-  .claude/skills/testing-guide-nestjs-project/SKILL.md: "2026-11-15T12:38:56-03:00"
+  .claude/skills/testing-guide-nestjs-project/SKILL.md: "2026-11-15T14:08:58-03:00"
 ---
 
 # phase-03-videos — Context
@@ -68,6 +68,7 @@ sources_mtime:
 | phase-03-videos/TD-10 | phase | Backend | Test Strategy for Storage, Queue and Worker | decided | A (Real infra, in-process worker on isolated namespace + smoke) | — |
 |     └─ Last revision: 2026-11-15 — Isolation via configurable exchange/queue names; testing guide updated to MinIO/RabbitMQ | | | | | | |
 | phase-03-videos/TD-11 | phase | Backend | RabbitMQ Client Library | decided | A (amqplib + amqp-connection-manager) | amqplib, amqp-connection-manager |
+|     └─ Last revision: 2026-11-15 — amqp-connection-manager pinned to 4.x (5.x pulls an ESM-only dep) | | | | | | |
 | phase-03-videos/TD-12 | phase | Backend | Messaging Topology, Retry Policy and Idempotent Consumer | decided | A (TTL retry queue + parking queue, idempotent consumer) | — |
 |     └─ Last revision: 2026-11-15 — Retry delay fixed at 5 s (configurable), 3 attempts | | | | | | |
 
@@ -177,6 +178,9 @@ _Source files:_
 **Recommendation:** amqplib + amqp-connection-manager — it is the only option that fits the installed Nest version without a framework upgrade and gives the explicit control over confirms, acks and queue arguments that the retry/dead-letter topology (TD-12) needs; the extra code is a small, testable module. Depends on TD-01.
 
 **Libraries:** amqplib, amqp-connection-manager
+
+**Revisions:**
+- 2026-11-15 — `amqp-connection-manager` pinned to the **4.x** line (`^4.1.15`, same API) instead of 5.x. Rationale: 5.x depends on `promise-breaker` 7, which is ESM-only and cannot be loaded by Jest's CommonJS runtime used by the project; 4.1.15 (2025-09) depends on the CJS `promise-breaker` 6. Found during SI-03.4.
 
 ### phase-03-videos/TD-12
 
@@ -385,3 +389,5 @@ _(from `testing-guide-nestjs-project` § 3 Feature Implementation Checklist and 
 | Exception filter | Unit + E2E |
 
 External-system strategies documented by the guide: PostgreSQL — real (Docker); Email — Mailpit (real SMTP capture); Message Queue — "real broker in Docker, technology TBD"; **Object Storage — "Local filesystem storage in development and tests. S3 in production"** (local adapter, no mocking).
+
+_Update 2026-11-15 (ICC-1, applied in SI-03.9):_ the guide now documents Object Storage — real MinIO in Docker and Message Queue — real RabbitMQ, with the test isolation helpers (`useInternalStorageEndpointForTests`, `useIsolatedQueueNamespaceForTests`).

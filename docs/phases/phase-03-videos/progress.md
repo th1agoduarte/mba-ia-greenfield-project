@@ -1,7 +1,7 @@
 # phase-03-videos — Progress
 
-**Status:** in_progress
-**SIs:** 8/9 completed
+**Status:** completed
+**SIs:** 9/9 completed
 
 ### SI-03.1 — Infraestrutura: storage, broker, FFmpeg e configuração
 - **Status:** completed
@@ -69,6 +69,12 @@
   - videos-flow.e2e-spec.ts sets a 60 s Jest timeout (real ffmpeg processing + polling).
 
 ### SI-03.9 — Contrato OpenAPI, documentação de IA e smoke do container worker
-- **Status:** pending
-- **Tests:** —
-- **Observations:** none
+- **Status:** completed
+- **Tests:** openapi-export.integration-spec.ts 17/17 (8 new /videos cases); smoke-video-pipeline.sh OK with the 35 KB fixture and with a 10,700,449,812-byte (9.97 GiB) video through the video-worker container (docs/evidencias/)
+- **Observations:** 
+  - openapi.json regenerated: 8 /videos operations.
+  - Testing guide (references/external-systems.md, SKILL.md) now documents real MinIO and RabbitMQ with the isolation helpers (ICC-1).
+  - Root CLAUDE.md, nestjs-project/CLAUDE.md, README.md and docs/diagrams/software-arch.mermaid (queue TBD → RabbitMQ) updated; every file cited in the CLAUDE.md files exists.
+  - Full e2e run exposed two issues: npm run test:e2e ran suites in parallel on the shared DB (CLAUDE.md already said e2e always runs --runInBand; the script now does), and an AMQP channel setup error emitted while an app was closing had no listener; publisher and consumer now log channel 'error' events.
+  - The first 10 GiB smoke attempt failed in the script itself (split wrote 10 GiB into the host /tmp, which has a quota); the script now streams parts with dd and compares the download with cmp, no copies on disk.
+  - Added the context7 MCP server to .mcp.json (CLAUDE.md requires it; it was missing from the base repo). During this session Context7 was queried through its public HTTP API.

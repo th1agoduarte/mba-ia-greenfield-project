@@ -47,6 +47,9 @@ export class VideoProcessingConsumer implements OnModuleDestroy {
       setup: (ch: ConfirmChannel) =>
         assertVideoProcessingTopology(ch, this.names, this.config.retryDelayMs),
     });
+    channel.on('error', (err: Error) =>
+      this.logger.warn(`Consumer channel error: ${err.message}`),
+    );
     this.channel = channel;
     await channel.waitForConnect();
     await channel.consume(
