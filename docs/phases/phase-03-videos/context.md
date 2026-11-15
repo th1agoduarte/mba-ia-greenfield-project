@@ -2,8 +2,9 @@
 kind: phase
 name: phase-03-videos
 sources_mtime:
+  docs/phases/phase-03-videos/library-refs.md: "2026-11-15T13:26:49-03:00"
   docs/project-plan.md: "2026-11-15T12:38:57-03:00"
-  docs/decisions/technical-decisions-phase-03-videos.md: "2026-11-15T13:13:39-03:00"
+  docs/decisions/technical-decisions-phase-03-videos.md: "2026-11-15T13:25:50-03:00"
   docs/decisions/technical-decisions-openapi-docs-nestjs.md: "2026-11-15T12:38:57-03:00"
   docs/decisions/technical-decisions-next-frontend-openapi-typing.md: "2026-11-15T12:38:57-03:00"
   docs/decisions/technical-decisions-next-frontend-config-base.md: "2026-11-15T12:38:57-03:00"
@@ -53,14 +54,21 @@ sources_mtime:
 |-----|--------|-------|-------|--------|----------|-----------|
 | phase-03-videos/TD-01 | phase | Backend | Message Queue Technology | decided | C (RabbitMQ) | — |
 | phase-03-videos/TD-02 | phase | Cross-layer | Upload Strategy for Files up to 10 GB | decided | A (Presigned multipart, direct to storage) | — |
+|     └─ Last revision: 2026-11-15 — Params fixed (10 GiB, 64 MiB parts, 1 h URLs, 100/batch); owner-only; @SkipThrottle | | | | | | |
 | phase-03-videos/TD-03 | phase | Backend | Object Storage Layout and Access Policy | decided | A (Single private bucket + presigned URLs) | — |
-| phase-03-videos/TD-04 | phase | Backend | S3 Client Library | decided | A (AWS SDK v3) | — |
+| phase-03-videos/TD-04 | phase | Backend | S3 Client Library | decided | A (AWS SDK v3) | @aws-sdk/client-s3, @aws-sdk/s3-request-presigner |
 | phase-03-videos/TD-05 | phase | Backend | Video Worker Runtime | decided | A (Same codebase, separate entry point and container) | — |
 | phase-03-videos/TD-06 | phase | Backend | Metadata Extraction and Thumbnail Generation | decided | A (Spawn ffprobe/ffmpeg CLI reading a presigned URL) | — |
+|     └─ Last revision: 2026-11-15 — Params fixed: frame at 10% of duration, JPEG 1280 px; no video stream = non-retryable | | | | | | |
 | phase-03-videos/TD-07 | phase | Backend | Unique Video URL Identifier | decided | A (Random 11-char base64url slug + unique index + retry) | — |
 | phase-03-videos/TD-08 | phase | Cross-layer | Streaming and Download Delivery | decided | A (302 redirect to a presigned URL) | — |
+|     └─ Last revision: 2026-11-15 — Owner-only, status ready required; @SkipThrottle on the videos controller | | | | | | |
 | phase-03-videos/TD-09 | phase | Backend | Video Status Lifecycle and Failure Handling | decided | A (draft → processing → ready/failed, API-triggered, 3 attempts) | — |
+|     └─ Last revision: 2026-11-15 — Mechanism re-expressed for RabbitMQ: idempotent consumer + TD-12 retry queue | | | | | | |
 | phase-03-videos/TD-10 | phase | Backend | Test Strategy for Storage, Queue and Worker | decided | A (Real infra, in-process worker on isolated namespace + smoke) | — |
+|     └─ Last revision: 2026-11-15 — Isolation via configurable exchange/queue names; testing guide updated to MinIO/RabbitMQ | | | | | | |
+| phase-03-videos/TD-11 | phase | Backend | RabbitMQ Client Library | decided | A (amqplib + amqp-connection-manager) | amqplib, amqp-connection-manager |
+| phase-03-videos/TD-12 | phase | Backend | Messaging Topology, Retry Policy and Idempotent Consumer | decided | A (TTL retry queue + parking queue, idempotent consumer) | — |
 
 _Source files:_
 
@@ -71,10 +79,10 @@ _Source files:_
 | Capability | Covered by |
 |------------|------------|
 | Serviço de armazenamento de arquivos (vídeos e thumbnails) | phase-03-videos/TD-03, phase-03-videos/TD-04, phase-03-videos/TD-10 |
-| Serviço de processamento em segundo plano (filas) | phase-03-videos/TD-01, phase-03-videos/TD-05, phase-03-videos/TD-10 |
+| Serviço de processamento em segundo plano (filas) | phase-03-videos/TD-01, phase-03-videos/TD-05, phase-03-videos/TD-10, phase-03-videos/TD-11, phase-03-videos/TD-12 |
 | Upload de vídeos com suporte a arquivos de até 10GB sem impacto na performance | phase-03-videos/TD-02 |
 | Pré-cadastro automático do vídeo como rascunho ao iniciar o upload | phase-03-videos/TD-02, phase-03-videos/TD-09 |
-| Processamento automático do vídeo após upload (extração de duração e metadados) | phase-03-videos/TD-06, phase-03-videos/TD-09, phase-03-videos/TD-10 |
+| Processamento automático do vídeo após upload (extração de duração e metadados) | phase-03-videos/TD-06, phase-03-videos/TD-09, phase-03-videos/TD-10, phase-03-videos/TD-12 |
 | Geração automática de thumbnail a partir de um frame do vídeo | phase-03-videos/TD-06, phase-03-videos/TD-10 |
 | URL única por vídeo, sem conflito com outros vídeos | phase-03-videos/TD-07 |
 | Reprodução via streaming (sem necessidade de download completo) | phase-03-videos/TD-08 |
@@ -96,6 +104,11 @@ _Source files:_
 
 **Libraries:** —
 
+**Revisions:**
+- 2026-11-15 — Parameters fixed: max declared size **10 GiB** (`10737418240` bytes); part size **64 MiB** (`67108864` bytes; 10 GiB → 160 parts, well under 10,000); presigned URLs valid **1 h**; at most **100** part URLs per request. Rationale: AMB-2 — values confirmed as decided parameters by the user.
+- 2026-11-15 — All upload endpoints (initiate, part URLs, list parts, complete, abort) are owner-only: JWT required and the video must belong to the caller's channel. Rationale: AMB-1 — Phase 03 access rule set to owner-only (visibility is Phase 04, anonymous viewing is Phase 05).
+- 2026-11-15 — The videos controller opts out of the global throttler with `@SkipThrottle()` (same pattern as `AppController`); a 10 GiB upload needs well over 10 requests/minute (part URL batches, resume). Rationale: ICC-2 — user chose `@SkipThrottle()` on the videos controller.
+
 ### phase-03-videos/TD-03
 
 **Recommendation:** Single private bucket + presigned URLs — it keeps every asset private until the visibility rules of Phases 04/05 exist, and needs only one bucket to bootstrap; the API signs URLs with a configurable public endpoint (`S3_PUBLIC_ENDPOINT`) distinct from the internal one (`S3_ENDPOINT`), so presigned links work from the host and from inside the Compose network. The bucket is created idempotently at stack start-up by a one-shot Compose service. Stable public thumbnails can be revisited in Phase 07 with a Revision if a CDN is introduced.
@@ -106,7 +119,7 @@ _Source files:_
 
 **Recommendation:** AWS SDK v3 — presigning `UploadPart` is required by the direct multipart strategy (TD-02 A) and only the AWS SDK exposes it, and it targets production S3 natively.
 
-**Libraries:** —
+**Libraries:** @aws-sdk/client-s3, @aws-sdk/s3-request-presigner
 
 ### phase-03-videos/TD-05
 
@@ -120,6 +133,9 @@ _Source files:_
 
 **Libraries:** —
 
+**Revisions:**
+- 2026-11-15 — Parameters fixed: thumbnail frame at **10% of the duration**, JPEG scaled to **1280 px** wide (keeping aspect ratio); input without a video stream is a non-retryable failure. Rationale: AMB-2 — values confirmed as decided parameters by the user.
+
 ### phase-03-videos/TD-07
 
 **Recommendation:** Random base64url slug with DB uniqueness — short, non-enumerable and dependency-free, with uniqueness enforced by a `UNIQUE` index plus retry, reusing a pattern the codebase already has.
@@ -132,15 +148,37 @@ _Source files:_
 
 **Libraries:** —
 
+**Revisions:**
+- 2026-11-15 — Access rule for Phase 03: video details, `stream` and `download` are **owner-only** (JWT + video belongs to the caller's channel); `stream`/`download` require status `ready`. Opening to other users/anonymous is left to Phases 04/05. The videos controller uses `@SkipThrottle()` (seeking re-requests `stream`). Rationale: AMB-1 + ICC-2 — owner-only chosen by the user; throttling opt-out chosen by the user.
+
 ### phase-03-videos/TD-09
 
 **Recommendation:** Persisted draft → processing → ready | failed, API-triggered, bounded retries — it is the lifecycle the phase specifies, persisted in the DB as required, with a portable trigger and idempotency from `jobId`; transient errors are retried by BullMQ and only the final outcome is written.
 
 **Libraries:** —
 
+**Revisions:**
+- 2026-11-15 — Mechanism re-expressed for RabbitMQ (TD-01 C, TD-12 A): no `jobId`; "complete" publishes one `video.uploaded` message after setting `processing`; duplicate deliveries are harmless because the worker only processes videos still in `processing` and writes the final state with a conditional update; retries = 3 attempts total via the TTL retry queue (TD-12), then `failed` with the error message stored. Rationale: IC-1 — same Option A, mechanism text referred to BullMQ.
+
 ### phase-03-videos/TD-10
 
 **Recommendation:** Real infra, in-process worker on an isolated prefix, plus a scripted smoke test of the container — every external system the phase introduces is exercised for real while keeping the tests deterministic; unit specs still mock collaborators per the testing rules, but integration/e2e never mock what Compose provides.
+
+**Libraries:** —
+
+**Revisions:**
+- 2026-11-15 — Queue isolation for tests uses configurable exchange/queue names (env `RABBITMQ_*` names): tests declare their own namespace so the `video-worker` container never consumes test messages (no BullMQ prefix). Rationale: IC-2 — same Option A, isolation mechanism referred to BullMQ.
+- 2026-11-15 — The testing guide's external-system strategy (`.claude/skills/testing-guide-nestjs-project/references/external-systems.md`) is updated in this phase: Object Storage → real MinIO in Docker; Message Queue → RabbitMQ. Rationale: ICC-1 — user kept real MinIO; the guide's "local filesystem" strategy predates the storage decision.
+
+### phase-03-videos/TD-11
+
+**Recommendation:** amqplib + amqp-connection-manager — it is the only option that fits the installed Nest version without a framework upgrade and gives the explicit control over confirms, acks and queue arguments that the retry/dead-letter topology (TD-12) needs; the extra code is a small, testable module. Depends on TD-01.
+
+**Libraries:** amqplib, amqp-connection-manager
+
+### phase-03-videos/TD-12
+
+**Recommendation:** TTL retry queue + parking queue, `x-attempt` header, idempotent consumer — it delivers TD-09's "3 attempts then `failed`" with a real delay between attempts using only stock RabbitMQ features, keeps the terminal-failure write in the same worker that processed the video, and makes duplicate deliveries harmless by guarding on `status = processing`. Suggested delay: 5 s; exchange/queue names configurable so tests can use their own namespace (TD-10).
 
 **Libraries:** —
 

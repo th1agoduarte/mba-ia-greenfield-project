@@ -77,6 +77,11 @@ _Research sources:_ Context7 (`/nestjs/docs.nestjs.com` queues recipe, `/taskfor
 
 **Decision:** A (Presigned multipart, direct to storage)
 
+**Revisions:**
+- 2026-11-15 — Parameters fixed: max declared size **10 GiB** (`10737418240` bytes); part size **64 MiB** (`67108864` bytes; 10 GiB → 160 parts, well under 10,000); presigned URLs valid **1 h**; at most **100** part URLs per request. Rationale: AMB-2 — values confirmed as decided parameters by the user.
+- 2026-11-15 — All upload endpoints (initiate, part URLs, list parts, complete, abort) are owner-only: JWT required and the video must belong to the caller's channel. Rationale: AMB-1 — Phase 03 access rule set to owner-only (visibility is Phase 04, anonymous viewing is Phase 05).
+- 2026-11-15 — The videos controller opts out of the global throttler with `@SkipThrottle()` (same pattern as `AppController`); a 10 GiB upload needs well over 10 requests/minute (part URL batches, resume). Rationale: ICC-2 — user chose `@SkipThrottle()` on the videos controller.
+
 ---
 
 ## TD-03: Object Storage Layout and Access Policy
@@ -133,6 +138,8 @@ _Research sources:_ Context7 (`/nestjs/docs.nestjs.com` queues recipe, `/taskfor
 **Recommendation:** **Option A (AWS SDK v3)** — presigning `UploadPart` is required by the direct multipart strategy (TD-02 A) and only the AWS SDK exposes it, and it targets production S3 natively.
 
 **Decision:** A (AWS SDK v3)
+
+**Libraries:** @aws-sdk/client-s3, @aws-sdk/s3-request-presigner
 
 ---
 
@@ -195,6 +202,9 @@ _Research sources:_ Context7 (`/nestjs/docs.nestjs.com` queues recipe, `/taskfor
 **Recommendation:** **Option A (direct CLI spawn reading a presigned URL)** — avoids a deprecated dependency and the 10 GB local copy; metadata and a single frame only need ranged reads. Suggested thumbnail frame: 10% of the duration (bounded to the video length), JPEG scaled to 1280 px wide; an input with no video stream fails processing (TD-09).
 
 **Decision:** A (Spawn ffprobe/ffmpeg CLI reading a presigned URL)
+
+**Revisions:**
+- 2026-11-15 — Parameters fixed: thumbnail frame at **10% of the duration**, JPEG scaled to **1280 px** wide (keeping aspect ratio); input without a video stream is a non-retryable failure. Rationale: AMB-2 — values confirmed as decided parameters by the user.
 
 ---
 
@@ -263,6 +273,9 @@ _Research sources:_ Context7 (`/nestjs/docs.nestjs.com` queues recipe, `/taskfor
 
 **Decision:** A (302 redirect to a presigned URL)
 
+**Revisions:**
+- 2026-11-15 — Access rule for Phase 03: video details, `stream` and `download` are **owner-only** (JWT + video belongs to the caller's channel); `stream`/`download` require status `ready`. Opening to other users/anonymous is left to Phases 04/05. The videos controller uses `@SkipThrottle()` (seeking re-requests `stream`). Rationale: AMB-1 + ICC-2 — owner-only chosen by the user; throttling opt-out chosen by the user.
+
 ---
 
 ## TD-09: Video Status Lifecycle and Failure Handling
@@ -293,6 +306,9 @@ _Research sources:_ Context7 (`/nestjs/docs.nestjs.com` queues recipe, `/taskfor
 **Recommendation:** **Option A (persisted draft → processing → ready | failed, API-triggered, bounded retries)** — it is the lifecycle the phase specifies, persisted in the DB as required, with a portable trigger and idempotency from `jobId`; transient errors are retried by BullMQ and only the final outcome is written.
 
 **Decision:** A (Persisted draft → processing → ready | failed, API-triggered, 3 attempts then `failed`)
+
+**Revisions:**
+- 2026-11-15 — Mechanism re-expressed for RabbitMQ (TD-01 C, TD-12 A): no `jobId`; "complete" publishes one `video.uploaded` message after setting `processing`; duplicate deliveries are harmless because the worker only processes videos still in `processing` and writes the final state with a conditional update; retries = 3 attempts total via the TTL retry queue (TD-12), then `failed` with the error message stored. Rationale: IC-1 — same Option A, mechanism text referred to BullMQ.
 
 ---
 
@@ -325,6 +341,10 @@ _Research sources:_ Context7 (`/nestjs/docs.nestjs.com` queues recipe, `/taskfor
 
 **Decision:** A (Real infra, in-process worker on an isolated queue namespace, plus scripted smoke test of the container)
 
+**Revisions:**
+- 2026-11-15 — Queue isolation for tests uses configurable exchange/queue names (env `RABBITMQ_*` names): tests declare their own namespace so the `video-worker` container never consumes test messages (no BullMQ prefix). Rationale: IC-2 — same Option A, isolation mechanism referred to BullMQ.
+- 2026-11-15 — The testing guide's external-system strategy (`.claude/skills/testing-guide-nestjs-project/references/external-systems.md`) is updated in this phase: Object Storage → real MinIO in Docker; Message Queue → RabbitMQ. Rationale: ICC-1 — user kept real MinIO; the guide's "local filesystem" strategy predates the storage decision.
+
 ---
 
 ## TD-11: RabbitMQ Client Library
@@ -355,6 +375,8 @@ _Research sources:_ Context7 (`/nestjs/docs.nestjs.com` queues recipe, `/taskfor
 **Recommendation:** **Option A (`amqplib` + `amqp-connection-manager`)** — it is the only option that fits the installed Nest version without a framework upgrade and gives the explicit control over confirms, acks and queue arguments that the retry/dead-letter topology (TD-12) needs; the extra code is a small, testable module. Depends on TD-01.
 
 **Decision:** A (amqplib + amqp-connection-manager)
+
+**Libraries:** amqplib, amqp-connection-manager
 
 ---
 
