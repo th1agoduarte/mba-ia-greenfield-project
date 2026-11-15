@@ -255,4 +255,46 @@ describe('Videos (e2e)', () => {
         .expect(404);
     });
   });
+
+  describe('GET /videos/:slug, stream and download before processing', () => {
+    it('returns the draft details to the owner and 404 to others', async () => {
+      const { slug } = await createDraft();
+
+      const res = await http()
+        .get(`/videos/${slug}`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+      expect(res.body).toMatchObject({
+        slug,
+        status: 'draft',
+        original_file_name: 'clip.mp4',
+        size_bytes: validBody.file_size,
+        duration_seconds: null,
+        thumbnail_url: null,
+      });
+
+      await http()
+        .get(`/videos/${slug}`)
+        .set('Authorization', `Bearer ${otherToken}`)
+        .expect(404);
+    });
+
+    it('answers 409 VIDEO_NOT_READY to stream and download of a video not ready', async () => {
+      const { slug } = await createDraft();
+      for (const route of ['stream', 'download']) {
+        const res = await http()
+          .get(`/videos/${slug}/${route}`)
+          .set('Authorization', `Bearer ${token}`)
+          .expect(409);
+        expect(res.body.error).toBe('VIDEO_NOT_READY');
+      }
+    });
+
+    it('answers 404 for an unknown slug', async () => {
+      await http()
+        .get('/videos/doesnotexis/stream')
+        .set('Authorization', `Bearer ${token}`)
+        .expect(404);
+    });
+  });
 });

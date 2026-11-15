@@ -1,5 +1,5 @@
 import { randomBytes } from 'crypto';
-import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { INestApplication, Type, ValidationPipe } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { Test, TestingModule } from '@nestjs/testing';
 import { App } from 'supertest/types';
@@ -23,11 +23,14 @@ export interface E2EContext {
  * Boots the API like main.ts does, signing presigned URLs for the internal
  * MinIO endpoint and publishing to a throwaway queue namespace (TD-10).
  */
-export async function createVideosE2EApp(label: string): Promise<E2EContext> {
+export async function createVideosE2EApp(
+  label: string,
+  extraImports: Type[] = [],
+): Promise<E2EContext> {
   useInternalStorageEndpointForTests();
   const namespace = useIsolatedQueueNamespaceForTests(label);
   const module = await Test.createTestingModule({
-    imports: [AppModule],
+    imports: [AppModule, ...extraImports],
   }).compile();
   const app = module.createNestApplication<INestApplication<App>>();
   app.useGlobalPipes(

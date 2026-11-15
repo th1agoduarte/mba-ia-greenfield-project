@@ -1,11 +1,12 @@
 import { Test } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { DataSource, QueryFailedError } from 'typeorm';
+import { QueryFailedError } from 'typeorm';
 import { ChannelsService } from '../channels/channels.service';
 import {
   InvalidPartNumberException,
   VideoInvalidStateException,
   VideoNotFoundException,
+  VideoNotReadyException,
 } from '../common/exceptions/domain.exception';
 import { VideoProcessingPublisher } from '../messaging/video-processing.publisher';
 import { StorageService } from '../storage/storage.service';
@@ -61,7 +62,6 @@ describe('VideosService', () => {
         { provide: ChannelsService, useValue: channelsService },
         { provide: StorageService, useValue: storageService },
         { provide: VideoProcessingPublisher, useValue: {} },
-        { provide: DataSource, useValue: {} },
       ],
     }).compile();
     service = module.get(VideosService);
@@ -164,18 +164,12 @@ describe('VideosService', () => {
 
 describe('VideosService.completeUpload', () => {
   let service: VideosService;
-  const manager = { update: jest.fn() };
   const videoRepository = { findOne: jest.fn(), update: jest.fn() };
   const storageService = {
     headObject: jest.fn(),
     completeMultipartUpload: jest.fn(),
   };
   const publisher = { publishVideoUploaded: jest.fn() };
-  const dataSource = {
-    transaction: jest.fn((cb: (m: typeof manager) => Promise<void>) =>
-      cb(manager),
-    ),
-  };
   const parts = [{ part_number: 1, etag: '"e1"' }];
 
   beforeEach(async () => {
@@ -187,7 +181,6 @@ describe('VideosService.completeUpload', () => {
         { provide: ChannelsService, useValue: {} },
         { provide: StorageService, useValue: storageService },
         { provide: VideoProcessingPublisher, useValue: publisher },
-        { provide: DataSource, useValue: dataSource },
       ],
     }).compile();
     service = module.get(VideosService);
@@ -206,13 +199,36 @@ describe('VideosService.completeUpload', () => {
       'upload-1',
       parts,
     );
-    expect(manager.update).toHaveBeenCalledWith(
-      Video,
+    expect(videoRepository.update).toHaveBeenCalledWith(
       { id: 'video-id', status: VideoStatus.DRAFT },
       { status: VideoStatus.PROCESSING, upload_id: null, size_bytes: 2048 },
     );
     expect(publisher.publishVideoUploaded).toHaveBeenCalledWith('video-id');
     expect(result.status).toBe(VideoStatus.PROCESSING);
+  });
+
+  it('commits processing before publishing and compensates to draft when the publish fails', async () => {
+    videoRepository.findOne.mockResolvedValue(draft());
+    storageService.headObject.mockResolvedValue({
+      contentLength: 2048,
+      contentType: 'video/mp4',
+    });
+    publisher.publishVideoUploaded.mockRejectedValueOnce(new Error('down'));
+
+    await expect(
+      service.completeUpload('user-1', 'slug', parts),
+    ).rejects.toThrow('down');
+
+    expect(videoRepository.update.mock.calls).toEqual([
+      [
+        { id: 'video-id', status: VideoStatus.DRAFT },
+        { status: VideoStatus.PROCESSING, upload_id: null, size_bytes: 2048 },
+      ],
+      [
+        { id: 'video-id', status: VideoStatus.PROCESSING },
+        { status: VideoStatus.DRAFT, upload_id: 'upload-1' },
+      ],
+    ]);
   });
 
   it('is idempotent while processing: returns without publishing again', async () => {
@@ -270,5 +286,78 @@ describe('VideosService.completeUpload', () => {
       }),
     );
     expect(publisher.publishVideoUploaded).not.toHaveBeenCalled();
+  });
+});
+
+describe('VideosService stream/download', () => {
+  let service: VideosService;
+  const videoRepository = { findOne: jest.fn() };
+  const storageService = {
+    presignGetObject: jest.fn().mockResolvedValue('http://storage/signed'),
+  };
+
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    const module = await Test.createTestingModule({
+      providers: [
+        VideosService,
+        { provide: getRepositoryToken(Video), useValue: videoRepository },
+        { provide: ChannelsService, useValue: {} },
+        { provide: StorageService, useValue: storageService },
+        { provide: VideoProcessingPublisher, useValue: {} },
+      ],
+    }).compile();
+    service = module.get(VideosService);
+  });
+
+  it('signs the original for a ready video', async () => {
+    videoRepository.findOne.mockResolvedValue(
+      draft({ status: VideoStatus.READY, upload_id: null }),
+    );
+
+    await expect(service.getStreamUrl('user-1', 'slug')).resolves.toBe(
+      'http://storage/signed',
+    );
+    expect(storageService.presignGetObject).toHaveBeenCalledWith(
+      'videos/video-id/original',
+    );
+  });
+
+  it('signs the download with the original file name', async () => {
+    videoRepository.findOne.mockResolvedValue(
+      draft({
+        status: VideoStatus.READY,
+        upload_id: null,
+        original_file_name: 'holiday.mp4',
+      }),
+    );
+
+    await service.getDownloadUrl('user-1', 'slug');
+
+    expect(storageService.presignGetObject).toHaveBeenCalledWith(
+      'videos/video-id/original',
+      { downloadFileName: 'holiday.mp4' },
+    );
+  });
+
+  it.each([VideoStatus.DRAFT, VideoStatus.PROCESSING, VideoStatus.FAILED])(
+    'rejects stream and download of a %s video with VIDEO_NOT_READY',
+    async (status) => {
+      videoRepository.findOne.mockResolvedValue(draft({ status }));
+
+      await expect(
+        service.getStreamUrl('user-1', 'slug'),
+      ).rejects.toBeInstanceOf(VideoNotReadyException);
+      await expect(
+        service.getDownloadUrl('user-1', 'slug'),
+      ).rejects.toBeInstanceOf(VideoNotReadyException);
+    },
+  );
+
+  it('answers VIDEO_NOT_FOUND to a non-owner', async () => {
+    videoRepository.findOne.mockResolvedValue(null);
+    await expect(service.getVideo('user-2', 'slug')).rejects.toBeInstanceOf(
+      VideoNotFoundException,
+    );
   });
 });

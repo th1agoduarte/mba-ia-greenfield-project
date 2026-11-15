@@ -1,7 +1,7 @@
 # phase-03-videos — Progress
 
 **Status:** in_progress
-**SIs:** 7/9 completed
+**SIs:** 8/9 completed
 
 ### SI-03.1 — Infraestrutura: storage, broker, FFmpeg e configuração
 - **Status:** completed
@@ -60,9 +60,13 @@
   - Fixture test/fixtures/sample.mp4 (35 KB, 2 s H.264 640x360 + AAC) generated with ffmpeg -f lavfi testsrc/sine.
 
 ### SI-03.8 — Detalhe, streaming e download do vídeo
-- **Status:** pending
-- **Tests:** —
-- **Observations:** none
+- **Status:** completed
+- **Tests:** videos suites 40/40 unit+integration; e2e 19/19 (videos.e2e-spec.ts 17 + videos-flow.e2e-spec.ts 2), two consecutive runs
+- **Observations:** 
+  - The full-flow e2e exposed a race in SI-03.6: publishing inside the DB transaction let the worker receive video.uploaded before the commit, read the video as draft, ignore it, and leave it stuck in processing. Fixed by committing processing first and publishing afterwards, with a compensating update back to draft when the publish fails (still retryable, TD-09). This supersedes the SI-03.6 note about sharing a transaction; unit + integration tests cover both paths.
+  - Split the worker feature into VideoProcessingModule (queue consumer + processing) and WorkerModule (root config/DB + feature). Two TypeORM roots in one process (API + worker) broke the default DataSource ('Driver not Connected'); the flow e2e now loads AppModule + VideoProcessingModule in one app.
+  - stream/download use Nest's @Redirect() returning { url, statusCode: 302 }; Range/206 and Content-Disposition are verified against the real MinIO through the Location URL.
+  - videos-flow.e2e-spec.ts sets a 60 s Jest timeout (real ffmpeg processing + polling).
 
 ### SI-03.9 — Contrato OpenAPI, documentação de IA e smoke do container worker
 - **Status:** pending

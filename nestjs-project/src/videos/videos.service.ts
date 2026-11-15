@@ -1,12 +1,13 @@
 import { randomBytes, randomUUID } from 'crypto';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, QueryFailedError, Repository } from 'typeorm';
+import { QueryFailedError, Repository } from 'typeorm';
 import { ChannelsService } from '../channels/channels.service';
 import {
   InvalidPartNumberException,
   VideoInvalidStateException,
   VideoNotFoundException,
+  VideoNotReadyException,
 } from '../common/exceptions/domain.exception';
 import { VideoProcessingPublisher } from '../messaging/video-processing.publisher';
 import { StorageService } from '../storage/storage.service';
@@ -16,7 +17,9 @@ import {
   InitiatedUploadDto,
   PartUrlsResponseDto,
   UploadedPartsResponseDto,
+  VideoDetailsDto,
   VideoSummaryDto,
+  toVideoDetails,
   toVideoSummary,
 } from './dto/video-response.dto';
 import { Video, VideoStatus } from './entities/video.entity';
@@ -55,7 +58,6 @@ export class VideosService {
     private readonly channelsService: ChannelsService,
     private readonly storageService: StorageService,
     private readonly publisher: VideoProcessingPublisher,
-    private readonly dataSource: DataSource,
   ) {}
 
   /**
@@ -153,9 +155,9 @@ export class VideosService {
   /**
    * Closes the multipart upload, moves the video to `processing` and
    * publishes `video.uploaded` (TD-09, TD-12). Idempotent: a video already in
-   * `processing` is returned as is, without a second message. The status
-   * change and the publish share a transaction, so a failed publish leaves
-   * the video in `draft` and the call can be retried.
+   * `processing` is returned as is, without a second message. If publishing
+   * fails, the status is compensated back to `draft` and the call can be
+   * retried.
    */
   async completeUpload(
     userId: string,
@@ -196,20 +198,53 @@ export class VideosService {
       return { ...toVideoSummary(video), status: VideoStatus.FAILED };
     }
 
-    await this.dataSource.transaction(async (manager) => {
-      await manager.update(
-        Video,
-        { id: video.id, status: VideoStatus.DRAFT },
-        {
-          status: VideoStatus.PROCESSING,
-          upload_id: null,
-          size_bytes: actualSize,
-        },
-      );
+    // Commit `processing` BEFORE publishing: the worker ignores videos that
+    // are not in `processing`, so it must never see the message first.
+    await this.videoRepository.update(
+      { id: video.id, status: VideoStatus.DRAFT },
+      {
+        status: VideoStatus.PROCESSING,
+        upload_id: null,
+        size_bytes: actualSize,
+      },
+    );
+    try {
       await this.publisher.publishVideoUploaded(video.id);
-    });
+    } catch (err) {
+      // Compensation: back to draft so the client can retry the call.
+      await this.videoRepository.update(
+        { id: video.id, status: VideoStatus.PROCESSING },
+        { status: VideoStatus.DRAFT, upload_id: video.upload_id },
+      );
+      throw err;
+    }
 
     return { ...toVideoSummary(video), status: VideoStatus.PROCESSING };
+  }
+
+  async getVideo(userId: string, slug: string): Promise<VideoDetailsDto> {
+    const video = await this.findOwnedOrFail(userId, slug);
+    const thumbnailUrl = video.thumbnail_key
+      ? await this.storageService.presignGetObject(video.thumbnail_key)
+      : null;
+    return toVideoDetails(video, thumbnailUrl);
+  }
+
+  /**
+   * Presigned GET of the original: the storage serves Range requests with
+   * 206, so playback starts without a full download (TD-08).
+   */
+  async getStreamUrl(userId: string, slug: string): Promise<string> {
+    const video = await this.findOwnedReady(userId, slug);
+    return this.storageService.presignGetObject(video.storage_key);
+  }
+
+  /** Same object, served as an attachment with the original file name. */
+  async getDownloadUrl(userId: string, slug: string): Promise<string> {
+    const video = await this.findOwnedReady(userId, slug);
+    return this.storageService.presignGetObject(video.storage_key, {
+      downloadFileName: video.original_file_name,
+    });
   }
 
   /** Owner-only access: other users get VIDEO_NOT_FOUND (AMB-1). */
@@ -219,6 +254,14 @@ export class VideosService {
     });
     if (!video) {
       throw new VideoNotFoundException();
+    }
+    return video;
+  }
+
+  private async findOwnedReady(userId: string, slug: string): Promise<Video> {
+    const video = await this.findOwnedOrFail(userId, slug);
+    if (video.status !== VideoStatus.READY) {
+      throw new VideoNotReadyException();
     }
     return video;
   }

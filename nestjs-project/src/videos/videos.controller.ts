@@ -7,6 +7,7 @@ import {
   HttpStatus,
   Param,
   Post,
+  Redirect,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -26,6 +27,7 @@ import {
   InitiatedUploadDto,
   PartUrlsResponseDto,
   UploadedPartsResponseDto,
+  VideoDetailsDto,
   VideoSummaryDto,
 } from './dto/video-response.dto';
 import { VideosService } from './videos.service';
@@ -171,5 +173,70 @@ export class VideosController {
     @Param('slug') slug: string,
   ): Promise<void> {
     return this.videosService.abortUpload(user.sub, slug);
+  }
+
+  @Get(':slug')
+  @ApiOperation({
+    summary: 'Get a video',
+    description:
+      'Returns the video status, duration, metadata and a presigned thumbnail URL once processed.',
+  })
+  @ApiResponse({ status: 200, description: 'Video', type: VideoDetailsDto })
+  @ApiResponse({ status: 404, description: 'Video not found', schema: ERROR })
+  findOne(
+    @CurrentUser() user: JwtPayload,
+    @Param('slug') slug: string,
+  ): Promise<VideoDetailsDto> {
+    return this.videosService.getVideo(user.sub, slug);
+  }
+
+  @Get(':slug/stream')
+  @Redirect()
+  @ApiOperation({
+    summary: 'Stream a video',
+    description:
+      'Redirects (302) to a presigned storage URL (1 h) that serves Range requests with 206 Partial Content.',
+  })
+  @ApiResponse({
+    status: 302,
+    description: 'Redirect to the presigned stream URL',
+  })
+  @ApiResponse({ status: 404, description: 'Video not found', schema: ERROR })
+  @ApiResponse({
+    status: 409,
+    description: 'Video is not ready',
+    schema: ERROR,
+  })
+  async stream(
+    @CurrentUser() user: JwtPayload,
+    @Param('slug') slug: string,
+  ): Promise<{ url: string; statusCode: number }> {
+    const url = await this.videosService.getStreamUrl(user.sub, slug);
+    return { url, statusCode: HttpStatus.FOUND };
+  }
+
+  @Get(':slug/download')
+  @Redirect()
+  @ApiOperation({
+    summary: 'Download a video',
+    description:
+      'Redirects (302) to a presigned storage URL (1 h) that serves the original file as an attachment.',
+  })
+  @ApiResponse({
+    status: 302,
+    description: 'Redirect to the presigned download URL',
+  })
+  @ApiResponse({ status: 404, description: 'Video not found', schema: ERROR })
+  @ApiResponse({
+    status: 409,
+    description: 'Video is not ready',
+    schema: ERROR,
+  })
+  async download(
+    @CurrentUser() user: JwtPayload,
+    @Param('slug') slug: string,
+  ): Promise<{ url: string; statusCode: number }> {
+    const url = await this.videosService.getDownloadUrl(user.sub, slug);
+    return { url, statusCode: HttpStatus.FOUND };
   }
 }
