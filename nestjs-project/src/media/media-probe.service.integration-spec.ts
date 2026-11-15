@@ -99,6 +99,46 @@ describe('MediaProbeService (integration — ffmpeg + MinIO)', () => {
     );
   });
 
+  describe('refuses playlists and non-HTTP inputs (no requests to internal URLs)', () => {
+    // Without the format whitelist ffprobe opens these manifests and requests
+    // the segment URL they point to (checked with ffprobe 5.1 of the image).
+    const hls = Buffer.from(
+      '#EXTM3U\n#EXT-X-TARGETDURATION:10\n#EXTINF:10,\nhttp://db:5432/segment.ts\n#EXT-X-ENDLIST\n',
+    );
+    const dash = Buffer.from(
+      '<?xml version="1.0" encoding="utf-8"?>\n' +
+        '<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" profiles="urn:mpeg:dash:profile:isoff-on-demand:2011" type="static" mediaPresentationDuration="PT10S" minBufferTime="PT1S">' +
+        '<Period><AdaptationSet mimeType="video/mp4"><Representation id="1" bandwidth="1000" width="64" height="64" codecs="avc1.42c00a">' +
+        '<BaseURL>http://db:5432/segment.mp4</BaseURL></Representation></AdaptationSet></Period></MPD>\n',
+    );
+
+    it.each([
+      ['an HLS playlist', hls],
+      ['a DASH manifest', dash],
+    ])(
+      'rejects %s as non-retryable in probe and thumbnail',
+      async (_name, body) => {
+        const url = await presignedSample(body);
+
+        for (const run of [
+          () => media.probe(url),
+          () => media.extractFrame(url, 0),
+        ]) {
+          const err = await run().catch((e: Error) => e);
+          expect(err).toBeInstanceOf(NonRetryableProcessingError);
+          expect((err as Error).message).toContain('not on whitelist');
+        }
+      },
+    );
+
+    it('rejects a local file input (protocol whitelist)', async () => {
+      const err = await media.probe('file:///etc/hostname').catch((e) => e);
+
+      expect(err).toBeInstanceOf(NonRetryableProcessingError);
+      expect((err as Error).message).toContain('not on whitelist');
+    });
+  });
+
   it('accepts a WebM without container duration (browser recording style)', async () => {
     // Writing WebM to a pipe leaves no duration in the header, like MediaRecorder output.
     const webm = execFileSync(

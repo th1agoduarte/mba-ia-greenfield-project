@@ -7,12 +7,33 @@ import type { ProbeResult } from './media.types';
 const PROCESS_TIMEOUT_MS = 120_000;
 const THUMBNAIL_WIDTH = 1280;
 
+/**
+ * Demuxers of the common video containers (names as `ffprobe -demuxers`
+ * lists them). Playlists (`hls`, `dash`), `concat` scripts and image demuxers
+ * are refused before they open anything, so an uploaded manifest cannot make
+ * the worker fetch internal URLs (blind SSRF).
+ */
+const FORMAT_WHITELIST =
+  'mov,mp4,m4a,3gp,3g2,mj2,matroska,webm,avi,flv,mpegts,mpeg,ogg,asf';
+
+/** The input is always a presigned HTTP(S) URL of the object storage. */
+const PROTOCOL_WHITELIST = 'http,https,tcp,tls';
+
+/** Input options shared by ffprobe and ffmpeg (they must precede the input). */
+const INPUT_GUARDS = [
+  '-format_whitelist',
+  FORMAT_WHITELIST,
+  '-protocol_whitelist',
+  PROTOCOL_WHITELIST,
+];
+
 /** stderr fragments that mean "this input will never work" (TD-06). */
 const NON_RETRYABLE_STDERR = [
   'Invalid data found when processing input',
   'moov atom not found',
   '404 Not Found',
   '403 Forbidden',
+  'not on whitelist',
 ];
 
 interface FfprobeStream {
@@ -61,6 +82,7 @@ export class MediaProbeService {
       'json',
       '-show_format',
       '-show_streams',
+      ...INPUT_GUARDS,
       input,
     ]);
     const data = JSON.parse(stdout.toString()) as FfprobeOutput;
@@ -96,6 +118,7 @@ export class MediaProbeService {
       'error',
       '-ss',
       atSeconds.toFixed(3),
+      ...INPUT_GUARDS,
       '-i',
       input,
       '-frames:v',
