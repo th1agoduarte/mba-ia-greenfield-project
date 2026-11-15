@@ -45,7 +45,7 @@ interface FfprobeStream {
   duration?: string;
 }
 
-interface FfprobeOutput {
+export interface FfprobeOutput {
   streams?: FfprobeStream[];
   format?: { format_name?: string; duration?: string; bit_rate?: string };
 }
@@ -67,6 +67,57 @@ function parseFrameRate(rate: string | undefined): number | null {
   return Math.round((num / den) * 1000) / 1000;
 }
 
+/** ffprobe demuxers of still images, which report a `video` stream. */
+const IMAGE_FORMAT =
+  /(^|,)(image2|image2pipe|[a-z0-9]+_pipe|gif|apng|webp)(,|$)/;
+
+/**
+ * Containers that may legitimately carry no duration (MediaRecorder WebM is
+ * written as a stream); any other input without a positive duration is not a
+ * playable video.
+ */
+const DURATIONLESS_FORMAT = /(^|,)(matroska|webm)(,|$)/;
+
+/**
+ * Turns ffprobe's JSON into duration + metadata, rejecting inputs that are
+ * not videos: no video stream, a still image (PNG/JPEG/GIF are reported as a
+ * `video` stream) or no positive duration outside Matroska/WebM.
+ */
+export function toProbeResult(data: FfprobeOutput): ProbeResult {
+  const formatName = data.format?.format_name ?? '';
+  if (IMAGE_FORMAT.test(formatName)) {
+    throw new NonRetryableProcessingError(
+      `Input is a still image (${formatName}), not a video`,
+    );
+  }
+  const streams = data.streams ?? [];
+  const video = streams.find((s) => s.codec_type === 'video');
+  const audio = streams.find((s) => s.codec_type === 'audio');
+  if (!video) {
+    throw new NonRetryableProcessingError('Input has no video stream');
+  }
+  // Some containers (e.g. browser-recorded WebM) carry no duration; fall
+  // back to the stream, and store null when it is unknown.
+  const duration =
+    toNumber(data.format?.duration) ?? toNumber(video.duration) ?? null;
+  const positive = duration !== null && duration > 0 ? duration : null;
+  if (positive === null && !DURATIONLESS_FORMAT.test(formatName)) {
+    throw new NonRetryableProcessingError(
+      `Input has no positive duration (${formatName || 'unknown format'})`,
+    );
+  }
+  const metadata: VideoMetadata = {
+    format_name: data.format?.format_name ?? null,
+    bit_rate: toNumber(data.format?.bit_rate),
+    width: video.width ?? null,
+    height: video.height ?? null,
+    video_codec: video.codec_name ?? null,
+    audio_codec: audio?.codec_name ?? null,
+    frame_rate: parseFrameRate(video.avg_frame_rate),
+  };
+  return { duration_seconds: positive, metadata };
+}
+
 /**
  * Runs the FFmpeg CLI directly (no wrapper — fluent-ffmpeg is deprecated)
  * against a presigned URL, so only the needed byte ranges are read
@@ -85,30 +136,7 @@ export class MediaProbeService {
       ...INPUT_GUARDS,
       input,
     ]);
-    const data = JSON.parse(stdout.toString()) as FfprobeOutput;
-    const streams = data.streams ?? [];
-    const video = streams.find((s) => s.codec_type === 'video');
-    const audio = streams.find((s) => s.codec_type === 'audio');
-    if (!video) {
-      throw new NonRetryableProcessingError('Input has no video stream');
-    }
-    // Some containers (e.g. browser-recorded WebM) carry no duration; fall
-    // back to the stream, and store null when it is unknown.
-    const duration =
-      toNumber(data.format?.duration) ?? toNumber(video.duration) ?? null;
-    const metadata: VideoMetadata = {
-      format_name: data.format?.format_name ?? null,
-      bit_rate: toNumber(data.format?.bit_rate),
-      width: video.width ?? null,
-      height: video.height ?? null,
-      video_codec: video.codec_name ?? null,
-      audio_codec: audio?.codec_name ?? null,
-      frame_rate: parseFrameRate(video.avg_frame_rate),
-    };
-    return {
-      duration_seconds: duration !== null && duration > 0 ? duration : null,
-      metadata,
-    };
+    return toProbeResult(JSON.parse(stdout.toString()) as FfprobeOutput);
   }
 
   /** Renders one JPEG frame at `atSeconds`, 1280 px wide. */

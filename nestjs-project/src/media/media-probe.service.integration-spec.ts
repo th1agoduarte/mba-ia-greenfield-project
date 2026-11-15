@@ -99,6 +99,37 @@ describe('MediaProbeService (integration — ffmpeg + MinIO)', () => {
     );
   });
 
+  it.each([
+    ['PNG', 'png'],
+    ['JPEG', 'mjpeg'],
+    ['GIF', 'gif'],
+  ])('rejects a still %s image as non-retryable', async (_name, codec) => {
+    const image = execFileSync(
+      'ffmpeg',
+      [
+        '-v',
+        'error',
+        '-f',
+        'lavfi',
+        '-i',
+        'testsrc=size=320x240',
+        '-frames:v',
+        '1',
+        '-c:v',
+        codec,
+        '-f',
+        'image2pipe',
+        'pipe:1',
+      ],
+      { maxBuffer: 10 * 1024 * 1024 },
+    );
+    const url = await presignedSample(image);
+
+    await expect(media.probe(url)).rejects.toBeInstanceOf(
+      NonRetryableProcessingError,
+    );
+  });
+
   describe('refuses playlists and non-HTTP inputs (no requests to internal URLs)', () => {
     // Without the format whitelist ffprobe opens these manifests and requests
     // the segment URL they point to (checked with ffprobe 5.1 of the image).
