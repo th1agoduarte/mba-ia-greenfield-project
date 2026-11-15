@@ -121,7 +121,30 @@ describe('StorageService (integration — MinIO)', () => {
 
     expect(res.status).toBe(200);
     expect(res.headers.get('content-disposition')).toBe(
-      'attachment; filename="my _clip_.mp4"',
+      `attachment; filename="my _clip_.mp4"; filename*=UTF-8''my%20%22clip%22.mp4`,
+    );
+  });
+
+  it('keeps a non-ASCII file name in filename* (RFC 5987) and strips CR/LF', async () => {
+    const key = newKey();
+    await storage.putObject(key, randomBytes(10), 'video/mp4');
+
+    const res = await fetch(
+      await storage.presignGetObject(key, {
+        downloadFileName: "Férias (São João)\r\nX-Injected: 1 'ok'.mp4",
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('x-injected')).toBeNull();
+    const disposition = res.headers.get('content-disposition')!;
+    expect(disposition).toBe(
+      'attachment; filename="F_rias (S_o Jo_o)__X-Injected: 1 \'ok\'.mp4"; ' +
+        "filename*=UTF-8''F%C3%A9rias%20%28S%C3%A3o%20Jo%C3%A3o%29%0D%0AX-Injected%3A%201%20%27ok%27.mp4",
+    );
+    const encoded = disposition.split("filename*=UTF-8''")[1];
+    expect(decodeURIComponent(encoded)).toBe(
+      "Férias (São João)\r\nX-Injected: 1 'ok'.mp4",
     );
   });
 

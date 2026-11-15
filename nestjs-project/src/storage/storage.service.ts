@@ -200,7 +200,7 @@ export class StorageService {
     options: PresignGetOptions = {},
   ): Promise<string> {
     const disposition = options.downloadFileName
-      ? `attachment; filename="${this.safeFileName(options.downloadFileName)}"`
+      ? this.attachmentDisposition(options.downloadFileName)
       : undefined;
     return getSignedUrl(
       options.internal ? this.client : this.publicClient,
@@ -244,8 +244,29 @@ export class StorageService {
     });
   }
 
+  /**
+   * RFC 6266: an ASCII, quote-safe `filename` for old clients plus
+   * `filename*` (RFC 5987, UTF-8 percent-encoded) with the real name, so
+   * non-ASCII names survive. CR/LF never reach the header raw: they become `_`
+   * in `filename` and `%0D%0A` in `filename*`.
+   */
+  private attachmentDisposition(name: string): string {
+    return `attachment; filename="${this.safeFileName(name)}"; filename*=UTF-8''${this.rfc5987(name)}`;
+  }
+
   /** Keeps the header value ASCII and quote-safe. */
   private safeFileName(name: string): string {
     return name.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_');
+  }
+
+  /** encodeURIComponent plus the characters RFC 5987 does not allow raw. */
+  private rfc5987(name: string): string {
+    // Lone surrogates make encodeURIComponent throw: replace them first.
+    return encodeURIComponent(
+      name.replace(/\p{Surrogate}/gu, '\ufffd'),
+    ).replace(
+      /['()*]/g,
+      (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`,
+    );
   }
 }

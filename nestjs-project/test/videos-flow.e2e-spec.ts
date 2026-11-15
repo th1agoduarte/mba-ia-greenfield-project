@@ -119,7 +119,7 @@ describe('Video pipeline (e2e)', () => {
     const file = await fetch(download.headers.location);
     expect(file.status).toBe(200);
     expect(file.headers.get('content-disposition')).toBe(
-      'attachment; filename="sample clip.mp4"',
+      `attachment; filename="sample clip.mp4"; filename*=UTF-8''sample%20clip.mp4`,
     );
     expect(Buffer.from(await file.arrayBuffer())).toEqual(sample);
   });
