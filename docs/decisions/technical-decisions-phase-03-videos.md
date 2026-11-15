@@ -275,7 +275,7 @@ _Research sources:_ Context7 (`/nestjs/docs.nestjs.com` queues recipe, `/taskfor
 
 **Revisions:**
 - 2026-11-15 — Access rule for Phase 03: video details, `stream` and `download` are **owner-only** (JWT + video belongs to the caller's channel); `stream`/`download` require status `ready`. Opening to other users/anonymous is left to Phases 04/05. The videos controller uses `@SkipThrottle()` (seeking re-requests `stream`). Rationale: AMB-1 + ICC-2 — owner-only chosen by the user; throttling opt-out chosen by the user.
-
+- 2026-11-15 — Presigned `stream`/`download` URLs are valid **1 h** (same lifetime as the upload part URLs). Rationale: AMB-3 — value confirmed by the user.
 ---
 
 ## TD-09: Video Status Lifecycle and Failure Handling
@@ -408,7 +408,8 @@ _Research sources:_ Context7 (`/nestjs/docs.nestjs.com` queues recipe, `/taskfor
 **Recommendation:** **Option A (TTL retry queue + parking queue, `x-attempt` header, idempotent consumer)** — it delivers TD-09's "3 attempts then `failed`" with a real delay between attempts using only stock RabbitMQ features, keeps the terminal-failure write in the same worker that processed the video, and makes duplicate deliveries harmless by guarding on `status = processing`. Suggested delay: 5 s; exchange/queue names configurable so tests can use their own namespace (TD-10).
 
 **Decision:** A (TTL retry queue + parking queue, `x-attempt` header, idempotent consumer)
-
+**Revisions:**
+- 2026-11-15 — Retry delay fixed at **5 s** (queue `x-message-ttl` of the retry queue, configurable by env); 3 attempts total. Rationale: AMB-3 — value confirmed by the user.
 ---
 
 ## Decisions Summary

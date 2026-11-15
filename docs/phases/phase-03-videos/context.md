@@ -2,9 +2,9 @@
 kind: phase
 name: phase-03-videos
 sources_mtime:
-  docs/phases/phase-03-videos/library-refs.md: "2026-11-15T13:26:49-03:00"
+  docs/phases/phase-03-videos/library-refs.md: "2026-11-15T13:27:53-03:00"
   docs/project-plan.md: "2026-11-15T12:38:57-03:00"
-  docs/decisions/technical-decisions-phase-03-videos.md: "2026-11-15T13:25:50-03:00"
+  docs/decisions/technical-decisions-phase-03-videos.md: "2026-11-15T13:27:49-03:00"
   docs/decisions/technical-decisions-openapi-docs-nestjs.md: "2026-11-15T12:38:57-03:00"
   docs/decisions/technical-decisions-next-frontend-openapi-typing.md: "2026-11-15T12:38:57-03:00"
   docs/decisions/technical-decisions-next-frontend-config-base.md: "2026-11-15T12:38:57-03:00"
@@ -62,13 +62,14 @@ sources_mtime:
 |     └─ Last revision: 2026-11-15 — Params fixed: frame at 10% of duration, JPEG 1280 px; no video stream = non-retryable | | | | | | |
 | phase-03-videos/TD-07 | phase | Backend | Unique Video URL Identifier | decided | A (Random 11-char base64url slug + unique index + retry) | — |
 | phase-03-videos/TD-08 | phase | Cross-layer | Streaming and Download Delivery | decided | A (302 redirect to a presigned URL) | — |
-|     └─ Last revision: 2026-11-15 — Owner-only, status ready required; @SkipThrottle on the videos controller | | | | | | |
+|     └─ Last revision: 2026-11-15 — Presigned stream/download URLs valid 1 h | | | | | | |
 | phase-03-videos/TD-09 | phase | Backend | Video Status Lifecycle and Failure Handling | decided | A (draft → processing → ready/failed, API-triggered, 3 attempts) | — |
 |     └─ Last revision: 2026-11-15 — Mechanism re-expressed for RabbitMQ: idempotent consumer + TD-12 retry queue | | | | | | |
 | phase-03-videos/TD-10 | phase | Backend | Test Strategy for Storage, Queue and Worker | decided | A (Real infra, in-process worker on isolated namespace + smoke) | — |
 |     └─ Last revision: 2026-11-15 — Isolation via configurable exchange/queue names; testing guide updated to MinIO/RabbitMQ | | | | | | |
 | phase-03-videos/TD-11 | phase | Backend | RabbitMQ Client Library | decided | A (amqplib + amqp-connection-manager) | amqplib, amqp-connection-manager |
 | phase-03-videos/TD-12 | phase | Backend | Messaging Topology, Retry Policy and Idempotent Consumer | decided | A (TTL retry queue + parking queue, idempotent consumer) | — |
+|     └─ Last revision: 2026-11-15 — Retry delay fixed at 5 s (configurable), 3 attempts | | | | | | |
 
 _Source files:_
 
@@ -150,6 +151,7 @@ _Source files:_
 
 **Revisions:**
 - 2026-11-15 — Access rule for Phase 03: video details, `stream` and `download` are **owner-only** (JWT + video belongs to the caller's channel); `stream`/`download` require status `ready`. Opening to other users/anonymous is left to Phases 04/05. The videos controller uses `@SkipThrottle()` (seeking re-requests `stream`). Rationale: AMB-1 + ICC-2 — owner-only chosen by the user; throttling opt-out chosen by the user.
+- 2026-11-15 — Presigned `stream`/`download` URLs are valid **1 h** (same lifetime as the upload part URLs). Rationale: AMB-3 — value confirmed by the user.
 
 ### phase-03-videos/TD-09
 
@@ -181,6 +183,9 @@ _Source files:_
 **Recommendation:** TTL retry queue + parking queue, `x-attempt` header, idempotent consumer — it delivers TD-09's "3 attempts then `failed`" with a real delay between attempts using only stock RabbitMQ features, keeps the terminal-failure write in the same worker that processed the video, and makes duplicate deliveries harmless by guarding on `status = processing`. Suggested delay: 5 s; exchange/queue names configurable so tests can use their own namespace (TD-10).
 
 **Libraries:** —
+
+**Revisions:**
+- 2026-11-15 — Retry delay fixed at **5 s** (queue `x-message-ttl` of the retry queue, configurable by env); 3 attempts total. Rationale: AMB-3 — value confirmed by the user.
 
 ## Inherited Decisions Detail
 

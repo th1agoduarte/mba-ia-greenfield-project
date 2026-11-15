@@ -1,11 +1,11 @@
 ---
 kind: phase
 name: phase-03-videos
-status: dirty
+status: clean
 issue_count: 0
 sources_mtime:
-  docs/phases/phase-03-videos/context.md: "2026-11-15T13:22:19-03:00"
-  docs/decisions/technical-decisions-phase-03-videos.md: "2026-11-15T13:22:09-03:00"
+  docs/phases/phase-03-videos/context.md: "2026-11-15T13:28:00-03:00"
+  docs/decisions/technical-decisions-phase-03-videos.md: "2026-11-15T13:27:49-03:00"
 issues:
   - id: IC-1
     status: resolved
@@ -35,6 +35,10 @@ issues:
     status: resolved
     summary: "Global throttler 10 req/60s vs part-URL batches and stream redirects"
     resolved_by: phase-03-videos/TD-02, phase-03-videos/TD-08
+  - id: AMB-3
+    status: resolved
+    summary: "TD-12 retry delay only 'suggested'; stream/download URL TTL unstated"
+    resolved_by: phase-03-videos/TD-12, phase-03-videos/TD-08
 advisories: []
 ---
 
@@ -79,3 +83,4 @@ _None._
 - **AMB-2** _(resolved_by phase-03-videos/TD-02, phase-03-videos/TD-06)_ — TD-02/TD-06 limits given only as 'suggested/e.g.' values. User confirmed the suggested values as decided parameters (10 GiB, 64 MiB parts, 1 h URLs, ≤100 part URLs per request; thumbnail at 10% of duration, JPEG 1280 px). Recorded as Revisions on TD-02 and TD-06.
 - **ICC-1** _(resolved_by phase-03-videos/TD-10)_ — TD-03/TD-10 real MinIO vs testing guide 'local filesystem' storage. User kept real MinIO; TD-10 Revision schedules the update of the testing guide's external-system strategy (Object Storage → MinIO in Docker; Message Queue → RabbitMQ) within this phase.
 - **ICC-2** _(resolved_by phase-03-videos/TD-02, phase-03-videos/TD-08)_ — Global throttler 10 req/60s vs part-URL batches and stream redirects. User chose `@SkipThrottle()` on the videos controller (same pattern as `AppController`). Recorded as Revisions on TD-02 and TD-08.
+- **AMB-3** _(resolved_by phase-03-videos/TD-12, phase-03-videos/TD-08)_ — TD-12 retry delay only 'suggested'; stream/download URL TTL unstated. Raised by the third validate run after the first resolve; the user confirmed 5 s retry delay (configurable) and 1 h presigned stream/download URLs, recorded as Revisions on TD-12 and TD-08.
