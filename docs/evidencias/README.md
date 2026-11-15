@@ -1,15 +1,15 @@
 # Evidências — Fase 03 (Upload e Processamento de Vídeos)
 
-Execuções feitas em 2026-11-15 contra a stack do `nestjs-project/compose.yaml` (Docker 29, Compose v5), na branch `feature/phase-03-videos`. O roteiro de verificação está em [`VALIDACAO.md`](../../VALIDACAO.md).
+Execuções feitas em 2026-11-15 contra a stack do `nestjs-project/compose.yaml` (Docker 29, Compose v5). DoD e smoke de amostra refeitos após as correções do code review (`bugfix/phase-03-code-review`); o upload de ~10 GiB foi executado antes delas. O roteiro de verificação está em [`VALIDACAO.md`](../../VALIDACAO.md).
 
 ## Definition of Done
 
 | Verificação | Comando (dentro de `nestjs-project/`) | Resultado | Log |
 |-------------|----------------------------------------|-----------|-----|
-| Unit + integração | `docker compose exec nestjs-api npm test -- --runInBand` | **35 suítes, 215 testes passando** | [dod-npm-test.log](dod-npm-test.log) |
+| Unit + integração | `docker compose exec nestjs-api npm test` (o script já roda em band) | **36 suítes, 221 testes passando** | [dod-npm-test.log](dod-npm-test.log) |
 | E2E | `docker compose exec nestjs-api npm run test:e2e` | **5 suítes, 71 testes passando** (rodado 2× seguidas) | [dod-test-e2e.log](dod-test-e2e.log) |
 | Type-check | `docker compose exec nestjs-api npx tsc --noEmit` | código de saída **0** | [dod-tsc.log](dod-tsc.log) |
-| Lint | `docker compose exec nestjs-api npm run lint` | código de saída **0**, sem erros | [dod-lint.log](dod-lint.log) |
+| Lint | `docker compose exec nestjs-api npx eslint "{src,apps,libs,test}/**/*.ts"` (sem `--fix`, para não alterar arquivos) | código de saída **0**, sem erros | [dod-lint.log](dod-lint.log) |
 | Checagem negativa | limite trocado para 5 GiB → `test/videos.e2e-spec.ts -t "10 GiB"` | falha como esperado (`expected 201 "Created", got 400`) e o arquivo foi restaurado | [negative-check.log](negative-check.log) |
 
 Os testes de integração e e2e usam MinIO, RabbitMQ, PostgreSQL e FFmpeg **reais** (sem mocks). O e2e [`test/videos-flow.e2e-spec.ts`](../../nestjs-project/test/videos-flow.e2e-spec.ts) cobre o fluxo inteiro: upload multipart → fila → worker → `ready` → stream (206) → download.

@@ -1,5 +1,5 @@
 
-==> Register smoke_1794763132_19632@example.com
+==> Register smoke_1794763978_11274@example.com
 
 ==> Confirm the account with the token from Mailpit
 
@@ -7,8 +7,8 @@
 
 ==> POST /videos — pre-register as draft (sample.mp4, 35207 bytes)
 {
-  "id": "4e3ad364-37a3-4415-8590-2ecb9c227e2b",
-  "slug": "TgBxc74qEZo",
+  "id": "65ad530d-fe4f-4e24-9a63-58fd35418abb",
+  "slug": "jVUML6Jh3i8",
   "title": "Smoke sample.mp4",
   "status": "draft",
   "upload": {
@@ -19,17 +19,17 @@
 }
 
 ==> Upload 1 part(s) of 67108864 bytes directly to the object storage
-  part 1 → http://localhost:9002/streamtube-videos/videos/4e3ad364-37a3-4415-8590-2ecb9c227e2b/original etag="4f452e9304f0b952238c1939068cf092"
+  part 1 → http://localhost:9002/streamtube-videos/videos/65ad530d-fe4f-4e24-9a63-58fd35418abb/original etag="4f452e9304f0b952238c1939068cf092"
   parts stored: 1
 
-==> POST /videos/TgBxc74qEZo/upload/complete
-{"id":"4e3ad364-37a3-4415-8590-2ecb9c227e2b","slug":"TgBxc74qEZo","title":"Smoke sample.mp4","status":"processing"}
+==> POST /videos/jVUML6Jh3i8/upload/complete
+{"id":"65ad530d-fe4f-4e24-9a63-58fd35418abb","slug":"jVUML6Jh3i8","title":"Smoke sample.mp4","status":"processing"}
 
 ==> Wait for the video-worker container to process it
   status: processing
   status: ready
 {
-  "slug": "TgBxc74qEZo",
+  "slug": "jVUML6Jh3i8",
   "status": "ready",
   "duration_seconds": 2,
   "metadata": {
@@ -42,15 +42,15 @@
     "video_codec": "h264"
   },
   "size_bytes": 35207,
-  "thumbnail": "http://localhost:9002/streamtube-videos/videos/4e3ad364-37a3-4415-8590-2ecb9c227e2b/thumbnail.jpg"
+  "thumbnail": "http://localhost:9002/streamtube-videos/videos/65ad530d-fe4f-4e24-9a63-58fd35418abb/thumbnail.jpg"
 }
   thumbnail content-type: image/jpeg
 
-==> GET /videos/TgBxc74qEZo/stream → 302 → Range request on the storage
+==> GET /videos/jVUML6Jh3i8/stream → 302 → Range request on the storage
   API: 302 · storage with Range 0-1023: 206 1024
 
-==> GET /videos/TgBxc74qEZo/download → 302 → attachment
+==> GET /videos/jVUML6Jh3i8/download → 302 → attachment
   downloaded file is identical to the upload
   Content-Disposition: attachment; filename="sample.mp4"
 
-SMOKE OK — video TgBxc74qEZo processed by the video-worker container
+SMOKE OK — video jVUML6Jh3i8 processed by the video-worker container

@@ -10,7 +10,7 @@ More info in the project overview: [docs/project-plan.md](docs/project-plan.md)
 
 This is a monorepo with two main areas:
 
-- `nestjs-project/` — Backend API (NestJS 11, TypeScript, Express). Contains modules for users, channels, videos, comments, etc.
+- `nestjs-project/` — Backend API (NestJS 11, TypeScript, Express). Modules: auth, users, channels, mail, videos, storage, messaging, media (plus common, config, database, swagger); comments/likes come in later phases.
 - `docs/` — Project documentation, architecture diagrams, and planning.
 - `next-frontend/` (Next.js) — not yet initialized
 
@@ -43,6 +43,8 @@ Inside a container, `localhost` refers to the container itself, not the host mac
 
 - **Correct:** `DB_HOST=db` (the Compose service name)
 - **Wrong:** `DB_HOST=localhost`
+
+**Single exception — `S3_PUBLIC_ENDPOINT`:** presigned URLs are consumed by clients outside the Compose network (browser, host scripts), and the signature embeds the host, so this variable holds the host-reachable address (e.g. `http://localhost:9000`). Server-side storage calls still use `S3_ENDPOINT=http://minio:9000` (`phase-03-videos/TD-03`). Tests sign for the internal endpoint via `useInternalStorageEndpointForTests()`.
 
 This applies to all environment variables, configuration files, and code that references service hosts.
 

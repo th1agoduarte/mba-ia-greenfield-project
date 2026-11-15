@@ -21,6 +21,7 @@ interface FfprobeStream {
   width?: number;
   height?: number;
   avg_frame_rate?: string;
+  duration?: string;
 }
 
 interface FfprobeOutput {
@@ -41,7 +42,8 @@ function toNumber(value: string | number | undefined): number | null {
 function parseFrameRate(rate: string | undefined): number | null {
   if (!rate) return null;
   const [num, den] = rate.split('/').map(Number);
-  return den ? Math.round((num / den) * 1000) / 1000 : toNumber(num);
+  if (!num || !den) return null; // ffprobe reports '0/0' when unknown
+  return Math.round((num / den) * 1000) / 1000;
 }
 
 /**
@@ -65,10 +67,13 @@ export class MediaProbeService {
     const streams = data.streams ?? [];
     const video = streams.find((s) => s.codec_type === 'video');
     const audio = streams.find((s) => s.codec_type === 'audio');
-    const duration = toNumber(data.format?.duration);
-    if (!video || !duration || duration <= 0) {
+    if (!video) {
       throw new NonRetryableProcessingError('Input has no video stream');
     }
+    // Some containers (e.g. browser-recorded WebM) carry no duration; fall
+    // back to the stream, and store null when it is unknown.
+    const duration =
+      toNumber(data.format?.duration) ?? toNumber(video.duration) ?? null;
     const metadata: VideoMetadata = {
       format_name: data.format?.format_name ?? null,
       bit_rate: toNumber(data.format?.bit_rate),
@@ -78,7 +83,10 @@ export class MediaProbeService {
       audio_codec: audio?.codec_name ?? null,
       frame_rate: parseFrameRate(video.avg_frame_rate),
     };
-    return { duration_seconds: duration, metadata };
+    return {
+      duration_seconds: duration !== null && duration > 0 ? duration : null,
+      metadata,
+    };
   }
 
   /** Renders one JPEG frame at `atSeconds`, 1280 px wide. */

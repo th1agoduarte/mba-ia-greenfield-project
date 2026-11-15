@@ -17,7 +17,7 @@ libs:
     context7_id: "— (not indexed by Context7; README from the npm registry)"
     fetched_at: "2026-11-15T13:30:00-03:00"
 sources_mtime:
-  docs/decisions/technical-decisions-phase-03-videos.md: "2026-11-15T13:49:43-03:00"
+  docs/decisions/technical-decisions-phase-03-videos.md: "2026-11-15T14:31:12-03:00"
 ---
 
 # phase-03-videos — Library References

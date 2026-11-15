@@ -69,7 +69,7 @@ export class VideoProcessingService {
     const { duration_seconds, metadata } = await this.mediaProbe.probe(source);
     const frame = await this.mediaProbe.extractFrame(
       source,
-      duration_seconds * THUMBNAIL_POSITION,
+      (duration_seconds ?? 0) * THUMBNAIL_POSITION,
     );
     const thumbnailKey = videoThumbnailKey(video.id);
     await this.storageService.putObject(thumbnailKey, frame, 'image/jpeg');

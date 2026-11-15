@@ -90,3 +90,13 @@ export class InvalidPartNumberException extends DomainException {
     );
   }
 }
+
+export class UploadTooLargeException extends DomainException {
+  constructor() {
+    super(
+      'UPLOAD_TOO_LARGE',
+      400,
+      'The uploaded file exceeds the 10 GiB limit',
+    );
+  }
+}

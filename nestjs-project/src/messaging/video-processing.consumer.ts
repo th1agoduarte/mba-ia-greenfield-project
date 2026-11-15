@@ -55,7 +55,6 @@ export class VideoProcessingConsumer implements OnModuleDestroy {
     await channel.consume(
       this.names.queue,
       (msg) => {
-        // Unacked on error: the broker redelivers it when the channel resets.
         this.onMessage(channel, msg, handler).catch((err: Error) =>
           this.logger.error(`Failed to settle message: ${err.message}`),
         );
@@ -75,7 +74,10 @@ export class VideoProcessingConsumer implements OnModuleDestroy {
     msg: ConsumeMessage,
     handler: VideoUploadedHandler,
   ): Promise<void> {
-    const attempt = Number(msg.properties.headers?.[ATTEMPT_HEADER] ?? 1);
+    // A missing or malformed header (e.g. a manual requeue) counts as attempt 1,
+    // so the retry limit always applies.
+    const header = Number(msg.properties.headers?.[ATTEMPT_HEADER]);
+    const attempt = Number.isInteger(header) && header >= 1 ? header : 1;
     const isLastAttempt = attempt >= this.config.maxAttempts;
     let outcome: ProcessingOutcome;
     let message: VideoUploadedMessage | null = null;
@@ -91,10 +93,20 @@ export class VideoProcessingConsumer implements OnModuleDestroy {
 
     // The channel is in JSON mode: forward the parsed body, not the Buffer.
     const body = message ?? { raw: msg.content.toString() };
-    if (outcome === 'retry' && !isLastAttempt) {
-      await this.forward(channel, this.names.retryQueue, body, attempt + 1);
-    } else if (outcome !== 'ok') {
-      await this.forward(channel, this.names.deadQueue, body, attempt);
+    try {
+      if (outcome === 'retry' && !isLastAttempt) {
+        await this.forward(channel, this.names.retryQueue, body, attempt + 1);
+      } else if (outcome !== 'ok') {
+        await this.forward(channel, this.names.deadQueue, body, attempt);
+      }
+    } catch (err) {
+      // Never leave the delivery unsettled: with prefetch 1 that would stall
+      // the consumer. Requeue it so it is handled again.
+      this.logger.error(
+        `Could not forward message (attempt ${attempt}): ${(err as Error).message}`,
+      );
+      channel.nack(msg, false, true);
+      return;
     }
     channel.ack(msg);
   }
