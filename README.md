@@ -143,16 +143,18 @@ Upload de até **10 GiB** sem passar pela API, processamento automático em fila
 
 | Método & Rota | Descrição |
 |---------------|-----------|
-| `POST /videos` | Inicia o upload: cria o rascunho e o multipart (`file_size` ≤ 10 GiB) |
-| `POST /videos/{slug}/upload/part-urls` | URLs pré-assinadas (1 h) para até 100 partes |
+| `POST /videos` | Inicia o upload: cria o rascunho e o multipart (`file_size` ≤ 10 GiB); limitado pelo throttler global (10/min) |
+| `POST /videos/{slug}/upload/part-urls` | URLs pré-assinadas (1 h) para até 100 partes, cada uma assinada para o tamanho exato da parte |
 | `GET /videos/{slug}/upload/parts` | Partes já enviadas (retomada) |
-| `POST /videos/{slug}/upload/complete` | Conclui o upload e dispara o processamento (idempotente) |
+| `POST /videos/{slug}/upload/complete` | Conclui o upload e dispara o processamento (repetível: em `processing` republica o job) |
 | `DELETE /videos/{slug}/upload` | Cancela o upload e remove o rascunho |
 | `GET /videos/{slug}` | Status, duração, metadados e URL da thumbnail |
 | `GET /videos/{slug}/stream` | `302` para o streaming (Range/206) |
-| `GET /videos/{slug}/download` | `302` para o download (anexo) |
+| `GET /videos/{slug}/download` | `302` para o download (anexo, com `filename*` UTF-8 para nomes não-ASCII) |
 
 Todas as rotas de vídeo exigem JWT e são restritas ao dono nesta fase (outro usuário recebe `404 VIDEO_NOT_FOUND`); visibilidade e acesso anônimo ficam para as Fases 04/05.
+
+Endurecimento após a revisão de segurança (SI-03.11): o worker só abre contêineres de vídeo comuns por HTTP(S) (`-format_whitelist`/`-protocol_whitelist`, sem HLS/DASH — evita SSRF), imagem estática termina em `failed`, o `processing_error` não carrega URLs pré-assinadas, uma reentrega da fila conta como tentativa (sem laço) e o console do MinIO e a UI do RabbitMQ ficam só em `127.0.0.1`. Riscos aceitos de ambiente de dev: a API usa as credenciais root do MinIO; uploads abandonados são expirados pelo próprio MinIO em 24 h, mas o rascunho fica no banco.
 
 Verificação ponta a ponta pelo container do worker (do host, com a API rodando): `cd nestjs-project && scripts/smoke-video-pipeline.sh [arquivo]`. Evidências em [`docs/evidencias/`](docs/evidencias/README.md).
 
@@ -190,9 +192,10 @@ A fase foi conduzida com o Claude Code usando a fundação de IA do repositório
 | `research` | [`docs/decisions/technical-decisions-phase-03-videos.md`](docs/decisions/technical-decisions-phase-03-videos.md) — 12 TDs (fila RabbitMQ, upload multipart pré-assinado, storage, worker, FFmpeg, slug, streaming, ciclo de status, testes, cliente AMQP, retry) |
 | `plan-context` | [`docs/phases/phase-03-videos/context.md`](docs/phases/phase-03-videos/context.md) |
 | `plan-validate` ↔ `plan-resolve` | [`validation.md`](docs/phases/phase-03-videos/validation.md) — 4 execuções do validate (dirty → MD-1 fechado por um research complementar → AMB-3 → clean), 8 issues resolvidos e listados em `Resolved Issues`, **status clean**; [`library-refs.md`](docs/phases/phase-03-videos/library-refs.md) com a doc das libs via Context7 |
-| `plan-build` | [`phase-03-videos.md`](docs/phases/phase-03-videos/phase-03-videos.md) — SI-03.1…SI-03.10 (SI-03.10: amendment do code review), Technical Specifications (Data Model, API Contracts, Authorization Matrix, Error Catalog, Events/Messages), Dependency Map, Deliverables |
+| `plan-build` | [`phase-03-videos.md`](docs/phases/phase-03-videos/phase-03-videos.md) — SI-03.1…SI-03.11 (SI-03.10 e SI-03.11: amendments das revisões), Technical Specifications (Data Model, API Contracts, Authorization Matrix, Error Catalog, Events/Messages), Dependency Map, Deliverables |
 | `implement` | Código em `nestjs-project/` + [`progress.md`](docs/phases/phase-03-videos/progress.md) (status, testes e observações por SI) |
 | Revisão | `/code-review` (nível high) + auditoria independente dos critérios do DESAFIO; correções em `bugfix/phase-03-code-review` e no SI-03.10 do plano |
+| Revisão de segurança | Code review + revisão de segurança independentes depois da entrega: 11 achados de código/infra (SR-1…SR-11) e 3 de documentação, corrigidos em `bugfix/phase-03-security-review` e `docs/phase-03-review-docs`, registrados como Revisions nas TDs, no SI-03.11 do plano e no `progress.md` |
 
 Documentação das libs: o Context7 foi consultado pela API HTTP pública dele (mesmo índice do MCP), porque o `.mcp.json` do repositório base não trazia o servidor `context7` — ele foi adicionado ao `.mcp.json` nesta fase. `amqp-connection-manager` não está indexado no Context7; a referência veio do README publicado no npm (registrado em `library-refs.md`).
 

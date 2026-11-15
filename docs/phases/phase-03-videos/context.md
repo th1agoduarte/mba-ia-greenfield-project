@@ -2,9 +2,9 @@
 kind: phase
 name: phase-03-videos
 sources_mtime:
-  docs/phases/phase-03-videos/library-refs.md: "2026-11-15T14:31:24-03:00"
+  docs/phases/phase-03-videos/library-refs.md: "2026-11-15T15:21:57-03:00"
   docs/project-plan.md: "2026-11-15T12:38:57-03:00"
-  docs/decisions/technical-decisions-phase-03-videos.md: "2026-11-15T14:31:12-03:00"
+  docs/decisions/technical-decisions-phase-03-videos.md: "2026-11-15T15:19:38-03:00"
   docs/decisions/technical-decisions-openapi-docs-nestjs.md: "2026-11-15T12:38:57-03:00"
   docs/decisions/technical-decisions-next-frontend-openapi-typing.md: "2026-11-15T12:38:57-03:00"
   docs/decisions/technical-decisions-next-frontend-config-base.md: "2026-11-15T12:38:57-03:00"
@@ -54,23 +54,24 @@ sources_mtime:
 |-----|--------|-------|-------|--------|----------|-----------|
 | phase-03-videos/TD-01 | phase | Backend | Message Queue Technology | decided | C (RabbitMQ) | — |
 | phase-03-videos/TD-02 | phase | Cross-layer | Upload Strategy for Files up to 10 GB | decided | A (Presigned multipart, direct to storage) | — |
-|     └─ Last revision: 2026-11-15 — Params fixed (10 GiB, 64 MiB parts, 1 h URLs, 100/batch); owner-only; @SkipThrottle | | | | | | |
+|     └─ Last revision: 2026-11-15 — Part URLs signed for the exact part size; throttler back on POST /videos, complete, abort; CHANNEL_NOT_FOUND | | | | | | |
 | phase-03-videos/TD-03 | phase | Backend | Object Storage Layout and Access Policy | decided | A (Single private bucket + presigned URLs) | — |
+|     └─ Last revision: 2026-11-15 — Admin UIs on loopback; MinIO expires stale multipart uploads (24 h); root credentials = dev-only risk | | | | | | |
 | phase-03-videos/TD-04 | phase | Backend | S3 Client Library | decided | A (AWS SDK v3) | @aws-sdk/client-s3, @aws-sdk/s3-request-presigner |
 | phase-03-videos/TD-05 | phase | Backend | Video Worker Runtime | decided | A (Same codebase, separate entry point and container) | — |
 | phase-03-videos/TD-06 | phase | Backend | Metadata Extraction and Thumbnail Generation | decided | A (Spawn ffprobe/ffmpeg CLI reading a presigned URL) | — |
-|     └─ Last revision: 2026-11-15 — Params fixed: frame at 10% of duration, JPEG 1280 px; no video stream = non-retryable | | | | | | |
+|     └─ Last revision: 2026-11-15 — Format/protocol whitelists (no HLS/DASH), still images rejected, URLs stripped from processing_error | | | | | | |
 | phase-03-videos/TD-07 | phase | Backend | Unique Video URL Identifier | decided | A (Random 11-char base64url slug + unique index + retry) | — |
 | phase-03-videos/TD-08 | phase | Cross-layer | Streaming and Download Delivery | decided | A (302 redirect to a presigned URL) | — |
-|     └─ Last revision: 2026-11-15 — Presigned stream/download URLs valid 1 h | | | | | | |
+|     └─ Last revision: 2026-11-15 — Download filename* (RFC 5987); skip-throttle kept on details/stream/download | | | | | | |
 | phase-03-videos/TD-09 | phase | Backend | Video Status Lifecycle and Failure Handling | decided | A (draft → processing → ready/failed, API-triggered, 3 attempts) | — |
-|     └─ Last revision: 2026-11-15 — Mechanism re-expressed for RabbitMQ: idempotent consumer + TD-12 retry queue | | | | | | |
+|     └─ Last revision: 2026-11-15 — complete repeatable while processing (republishes; recovers stuck videos) | | | | | | |
 | phase-03-videos/TD-10 | phase | Backend | Test Strategy for Storage, Queue and Worker | decided | A (Real infra, in-process worker on isolated namespace + smoke) | — |
 |     └─ Last revision: 2026-11-15 — Isolation via configurable exchange/queue names; testing guide updated to MinIO/RabbitMQ | | | | | | |
 | phase-03-videos/TD-11 | phase | Backend | RabbitMQ Client Library | decided | A (amqplib + amqp-connection-manager) | amqplib, amqp-connection-manager |
 |     └─ Last revision: 2026-11-15 — amqp-connection-manager pinned to 4.x (5.x pulls an ESM-only dep) | | | | | | |
 | phase-03-videos/TD-12 | phase | Backend | Messaging Topology, Retry Policy and Idempotent Consumer | decided | A (TTL retry queue + parking queue, idempotent consumer) | — |
-|     └─ Last revision: 2026-11-15 — Retry delay fixed at 5 s (configurable), 3 attempts | | | | | | |
+|     └─ Last revision: 2026-11-15 — Redelivered message counts as an attempt (no crash loop) | | | | | | |
 
 _Source files:_
 
@@ -112,12 +113,17 @@ _Source files:_
 - 2026-11-15 — Parameters fixed: max declared size **10 GiB** (`10737418240` bytes); part size **64 MiB** (`67108864` bytes; 10 GiB → 160 parts, well under 10,000); presigned URLs valid **1 h**; at most **100** part URLs per request. Rationale: AMB-2 — values confirmed as decided parameters by the user.
 - 2026-11-15 — All upload endpoints (initiate, part URLs, list parts, complete, abort) are owner-only: JWT required and the video must belong to the caller's channel. Rationale: AMB-1 — Phase 03 access rule set to owner-only (visibility is Phase 04, anonymous viewing is Phase 05).
 - 2026-11-15 — The videos controller opts out of the global throttler with `@SkipThrottle()` (same pattern as `AppController`); a 10 GiB upload needs well over 10 requests/minute (part URL batches, resume). Rationale: ICC-2 — user chose `@SkipThrottle()` on the videos controller.
+- 2026-11-15 — Each presigned part URL is signed for the exact part size (`content-length` is a signed header: 64 MiB, the last part carries the remainder of the declared `file_size`); the storage rejects a body of any other size (`SignatureDoesNotMatch`), so an oversized part is refused at upload time instead of only at `complete` (each part could reach 5 GiB, ≈ 800 GiB for 160 parts). The 10 GiB check on the assembled object stays as a second barrier. `POST /videos` for a user without a channel answers `404 CHANNEL_NOT_FOUND` (it was a 500); a failed compensating abort is logged and the original error is kept. Rationale: SR-2, SR-4 — security/code review after delivery (SI-03.11).
+- 2026-11-15 — Throttling narrowed, superseding the controller-wide `@SkipThrottle()` of ICC-2: the global throttler (10 req/60 s) applies to `POST /videos`, `complete` and `DELETE …/upload`; `@SkipThrottle()` stays only on the routes a client calls in a loop (part URLs and parts list during a long upload/resume, video details for status polling, stream and download). Rationale: SR-3 — the controller-wide skip left `POST /videos` (draft + multipart upload on the storage) without any limit; narrowing requested by the user in the review (SI-03.11).
 
 ### phase-03-videos/TD-03
 
 **Recommendation:** Single private bucket + presigned URLs — it keeps every asset private until the visibility rules of Phases 04/05 exist, and needs only one bucket to bootstrap; the API signs URLs with a configurable public endpoint (`S3_PUBLIC_ENDPOINT`) distinct from the internal one (`S3_ENDPOINT`), so presigned links work from the host and from inside the Compose network. The bucket is created idempotently at stack start-up by a one-shot Compose service. Stable public thumbnails can be revisited in Phase 07 with a Revision if a CDN is introduced.
 
 **Libraries:** —
+
+**Revisions:**
+- 2026-11-15 — Dev-stack hardening: the MinIO console and the RabbitMQ management UI are published on the host loopback only (`127.0.0.1`, effective on the next `docker compose up`); the S3 API and AMQP ports are unchanged (clients and presigned URLs use them). Known dev-only risk, documented and not changed: the API/worker sign and call the storage with the MinIO root credentials (`S3_ACCESS_KEY`/`S3_SECRET_KEY` = `MINIO_ROOT_USER`/`MINIO_ROOT_PASSWORD`); production must use a dedicated least-privilege user/IAM role limited to the bucket — doing it here requires recreating the stack. Abandoned multipart uploads are expired by MinIO itself: `stale_uploads_expiry=24h`, `stale_uploads_cleanup_interval=6h` (defaults of `RELEASE.2026-08-04`, read from the running server with `mc admin config get <alias> api`), so `minio-init` needs no extra rule; the `draft` row of an abandoned upload is kept (a cleanup job is out of this phase's scope). Rationale: SR-10, SR-11 — security review after delivery (SI-03.11).
 
 ### phase-03-videos/TD-04
 
@@ -139,6 +145,7 @@ _Source files:_
 
 **Revisions:**
 - 2026-11-15 — Parameters fixed: thumbnail frame at **10% of the duration**, JPEG scaled to **1280 px** wide (keeping aspect ratio); input without a video stream is a non-retryable failure. Rationale: AMB-2 — values confirmed as decided parameters by the user.
+- 2026-11-15 — Input hardening: ffprobe/ffmpeg run with `-format_whitelist mov,mp4,m4a,3gp,3g2,mj2,matroska,webm,avi,flv,mpegts,mpeg,ogg,asf` and `-protocol_whitelist http,https,tcp,tls`, so an uploaded HLS/DASH manifest (or a concat script) is refused before it can make the worker request internal URLs (blind SSRF, reproduced with a segment at `http://db:5432`). Still images (ffprobe reports PNG/JPEG/GIF as a `video` stream) and inputs without a positive duration are non-retryable failures; only Matroska/WebM may lack a duration (browser recordings, SI-03.10). URLs and query strings are stripped from the error text before it is stored in `processing_error`, which carried the internal presigned URL (storage host, access key id, signature) back to the owner. Rationale: SR-5, SR-8, SR-9 — security review after delivery (SI-03.11).
 
 ### phase-03-videos/TD-07
 
@@ -155,6 +162,7 @@ _Source files:_
 **Revisions:**
 - 2026-11-15 — Access rule for Phase 03: video details, `stream` and `download` are **owner-only** (JWT + video belongs to the caller's channel); `stream`/`download` require status `ready`. Opening to other users/anonymous is left to Phases 04/05. The videos controller uses `@SkipThrottle()` (seeking re-requests `stream`). Rationale: AMB-1 + ICC-2 — owner-only chosen by the user; throttling opt-out chosen by the user.
 - 2026-11-15 — Presigned `stream`/`download` URLs are valid **1 h** (same lifetime as the upload part URLs). Rationale: AMB-3 — value confirmed by the user.
+- 2026-11-15 — The download `Content-Disposition` carries an ASCII, quote-safe `filename` plus `filename*=UTF-8''<percent-encoded name>` (RFC 6266/5987), so non-ASCII names are kept; CR/LF never reach the header raw. Details, stream and download keep `@SkipThrottle()` (status polling, seeking) — see the TD-02 throttling revision. Rationale: SR-6, SR-3 — review after delivery (SI-03.11).
 
 ### phase-03-videos/TD-09
 
@@ -164,6 +172,7 @@ _Source files:_
 
 **Revisions:**
 - 2026-11-15 — Mechanism re-expressed for RabbitMQ (TD-01 C, TD-12 A): no `jobId`; "complete" publishes one `video.uploaded` message after setting `processing`; duplicate deliveries are harmless because the worker only processes videos still in `processing` and writes the final state with a conditional update; retries = 3 attempts total via the TTL retry queue (TD-12), then `failed` with the error message stored. Rationale: IC-1 — same Option A, mechanism text referred to BullMQ.
+- 2026-11-15 — `complete` is repeatable instead of a no-op while `processing`: calling it again republishes `video.uploaded`. This recovers, without new infrastructure, a call that committed `processing` and died before publishing, and a message parked in the dead queue while the video is still `processing` (e.g. the database was down on the last attempt, so the worker could not mark `failed`). Duplicates are harmless: the worker only processes videos still in `processing` and writes with conditional updates. Concurrent calls on a `draft` still publish once. Rationale: SR-1 — review after delivery (SI-03.11).
 
 ### phase-03-videos/TD-10
 
@@ -192,6 +201,7 @@ _Source files:_
 
 **Revisions:**
 - 2026-11-15 — Retry delay fixed at **5 s** (queue `x-message-ttl` of the retry queue, configurable by env); 3 attempts total. Rationale: AMB-3 — value confirmed by the user.
+- 2026-11-15 — A redelivered message (`fields.redelivered`: an earlier delivery was never settled — worker crash, lost channel or the consumer's own nack-requeue) counts as a used attempt: it goes to the retry queue with `x-attempt + 1`, or to the dead queue when the attempts are exhausted, without running the handler, so an input that crashes the worker no longer loops. Classic queues are kept: `x-death` only exists after dead-lettering and `x-delivery-count` only on quorum queues (Option B, not chosen; switching the queue type requires redeclaring the queues). Rationale: SR-7 — review after delivery (SI-03.11).
 
 ## Inherited Decisions Detail
 
