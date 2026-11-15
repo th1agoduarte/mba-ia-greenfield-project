@@ -327,6 +327,68 @@ _Research sources:_ Context7 (`/nestjs/docs.nestjs.com` queues recipe, `/taskfor
 
 ---
 
+## TD-11: RabbitMQ Client Library
+
+**Scope:** Backend
+
+**Capability:** Serviço de processamento em segundo plano (filas)
+
+**Context:** Added after `/plan-validate` (MD-1): TD-01 chose RabbitMQ, so the Node/Nest client that publishes from the API and consumes in the worker (TD-05) is still open. Installed versions constrain the choice: `@nestjs/common`/`@nestjs/core` **11.1.16** (`nestjs-project/package-lock.json`). The client must support publisher confirms, manual `ack`/`nack`, `prefetch`, declaring exchanges/queues with arguments (dead-letter, TTL, quorum) and reconnection.
+
+**Options:**
+
+### Option A: `amqplib` + `amqp-connection-manager`, thin Nest provider of our own
+- `amqplib` 2.3.x (official-community AMQP 0-9-1 client, Context7 `/amqp-node/amqplib`) wrapped by `amqp-connection-manager` 5.x (auto-reconnect, channel setup replay, confirm channels). A small `MessagingModule` exposes a publisher service and a consumer bootstrap used by the worker.
+- **Pros:** No framework coupling — works with the installed Nest 11.1.16. Full control of topology arguments, publisher confirms, manual ack and prefetch (all needed by TD-12). Two small, actively released libraries.
+- **Cons:** We write the module, lifecycle hooks (`onModuleInit`/`onApplicationShutdown`) and the consumer loop ourselves (~150 lines). No decorators.
+
+### Option B: `@golevelup/nestjs-rabbitmq` 9.x
+- Nest module with declarative exchanges/queues and `@RabbitSubscribe` handlers; built on `amqp-connection-manager`.
+- **Pros:** Declarative config, decorator-based consumers, built-in RPC and error behaviors (nack/requeue).
+- **Cons:** Peer dependency `@nestjs/common ^11.1.24` — requires bumping Nest core in this phase (out of scope per CLAUDE.md "one scope at a time"). Depends on the older `amqplib ^0.10.9` line. Retry-with-delay still has to be built on top.
+
+### Option C: `@nestjs/microservices` RMQ transport (11.x)
+- Official Nest transport; the worker becomes a microservice with `@EventPattern`, the API publishes with `ClientProxy.emit`.
+- **Pros:** First-party package; familiar decorator model.
+- **Cons:** Transport-oriented: it owns the queue declaration (only `queueOptions`), wraps payloads in its own `{ pattern, data }` envelope and offers no exchange/retry-queue topology — the dead-letter/retry design of TD-12 fights the abstraction. Needs a hybrid app or a second bootstrap style for the worker.
+
+**Recommendation:** **Option A (`amqplib` + `amqp-connection-manager`)** — it is the only option that fits the installed Nest version without a framework upgrade and gives the explicit control over confirms, acks and queue arguments that the retry/dead-letter topology (TD-12) needs; the extra code is a small, testable module. Depends on TD-01.
+
+**Decision:** A (amqplib + amqp-connection-manager)
+
+---
+
+## TD-12: Messaging Topology, Retry Policy and Idempotent Consumer
+
+**Scope:** Backend
+
+**Capability:** Transversal — covers: "Serviço de processamento em segundo plano (filas)", "Processamento automático do vídeo após upload (extração de duração e metadados)"
+
+**Context:** Added after `/plan-validate` (MD-1, IC-1). TD-09 fixed the lifecycle (3 attempts, then `failed`) but not how RabbitMQ delivers it. RabbitMQ 4.x facts (Context7 `/websites/rabbitmq`): quorum queues count failed deliveries (`x-delivery-count`) and dead-letter a message when it exceeds `x-delivery-limit` (default 20 since 4.0) if a DLX is configured; per-queue `x-message-ttl` + dead-lettering can implement delayed retries without plugins. Delivery is at-least-once, so the consumer must be idempotent. Depends on TD-01, TD-09, TD-11.
+
+**Options:**
+
+### Option A: Main queue + TTL retry queue + dead-letter queue, attempt counter in a header
+- Direct exchange `videos` → durable queue `videos.processing`. On a retryable failure the worker publishes a copy to `videos.processing.retry` (queue `x-message-ttl` = fixed delay, its DLX routes back to `videos`) with header `x-attempt` incremented, then acks the original. After the last attempt (3) the worker marks the video `failed` and publishes to `videos.processing.dead` (parking queue). Persistent messages, publisher confirms, `prefetch(1)`, ack only after the DB commit; the consumer ignores messages whose video is not in `processing`.
+- **Pros:** Delay between attempts (transient storage/network errors get time to recover), explicit and observable attempt count, no plugin, works with classic or quorum queues. Failed messages are kept for inspection.
+- **Cons:** More moving parts (3 queues, 2 exchanges bindings); the worker owns the retry publish.
+
+### Option B: Quorum queue with `x-delivery-limit` + DLX (broker-counted retries)
+- `videos.processing` declared as quorum queue with `x-delivery-limit: 2` (3 deliveries) and a dead-letter exchange; the worker `nack(requeue)` on failure; the broker dead-letters after the limit and a small consumer of the DLQ marks the video `failed`.
+- **Pros:** Retry counting done by the broker; least application code.
+- **Cons:** Redelivery is immediate (no backoff) — 3 attempts can burn in milliseconds on a transient outage. The terminal `failed` write moves to a second consumer (DLQ), splitting the failure path.
+
+### Option C: Delayed-message exchange plugin
+- `rabbitmq_delayed_message_exchange` with `x-delay` per message for exponential backoff.
+- **Pros:** True per-message exponential backoff.
+- **Cons:** Plugin not shipped in the official image (custom image), known scalability limits documented by the plugin; adds infra customization for a 3-attempt policy.
+
+**Recommendation:** **Option A (TTL retry queue + parking queue, `x-attempt` header, idempotent consumer)** — it delivers TD-09's "3 attempts then `failed`" with a real delay between attempts using only stock RabbitMQ features, keeps the terminal-failure write in the same worker that processed the video, and makes duplicate deliveries harmless by guarding on `status = processing`. Suggested delay: 5 s; exchange/queue names configurable so tests can use their own namespace (TD-10).
+
+**Decision:** A (TTL retry queue + parking queue, `x-attempt` header, idempotent consumer)
+
+---
+
 ## Decisions Summary
 
 | ID | Scope | Decision | Recommendation | Choice |
@@ -341,3 +403,5 @@ _Research sources:_ Context7 (`/nestjs/docs.nestjs.com` queues recipe, `/taskfor
 | TD-08 | Cross-layer | Streaming and Download Delivery | A (302 to presigned URL) | A |
 | TD-09 | Backend | Video Status Lifecycle and Failure Handling | A (draft → processing → ready/failed, API-triggered, bounded retries) | A |
 | TD-10 | Backend | Test Strategy for Storage, Queue and Worker | A (Real infra, in-process worker on isolated prefix + smoke) | A |
+| TD-11 | Backend | RabbitMQ Client Library | A (amqplib + amqp-connection-manager) | A |
+| TD-12 | Backend | Messaging Topology, Retry Policy and Idempotent Consumer | A (TTL retry queue + parking queue, idempotent consumer) | A |
