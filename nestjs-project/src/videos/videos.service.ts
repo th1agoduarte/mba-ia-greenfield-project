@@ -1,19 +1,22 @@
 import { randomBytes, randomUUID } from 'crypto';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { QueryFailedError, Repository } from 'typeorm';
+import { DataSource, QueryFailedError, Repository } from 'typeorm';
 import { ChannelsService } from '../channels/channels.service';
 import {
   InvalidPartNumberException,
   VideoInvalidStateException,
   VideoNotFoundException,
 } from '../common/exceptions/domain.exception';
+import { VideoProcessingPublisher } from '../messaging/video-processing.publisher';
 import { StorageService } from '../storage/storage.service';
+import type { CompletedPartInput } from '../storage/storage.types';
 import { CreateVideoDto } from './dto/create-video.dto';
 import {
   InitiatedUploadDto,
   PartUrlsResponseDto,
   UploadedPartsResponseDto,
+  VideoSummaryDto,
   toVideoSummary,
 } from './dto/video-response.dto';
 import { Video, VideoStatus } from './entities/video.entity';
@@ -34,6 +37,8 @@ function isSlugCollision(err: unknown): boolean {
   );
 }
 
+export const OVERSIZED_UPLOAD_ERROR = 'Uploaded file exceeds the 10 GiB limit';
+
 export function generateVideoSlug(): string {
   return randomBytes(VIDEO_SLUG.RANDOM_BYTES).toString('base64url');
 }
@@ -49,6 +54,8 @@ export class VideosService {
     private readonly videoRepository: Repository<Video>,
     private readonly channelsService: ChannelsService,
     private readonly storageService: StorageService,
+    private readonly publisher: VideoProcessingPublisher,
+    private readonly dataSource: DataSource,
   ) {}
 
   /**
@@ -141,6 +148,68 @@ export class VideosService {
       video.upload_id!,
     );
     await this.videoRepository.delete({ id: video.id });
+  }
+
+  /**
+   * Closes the multipart upload, moves the video to `processing` and
+   * publishes `video.uploaded` (TD-09, TD-12). Idempotent: a video already in
+   * `processing` is returned as is, without a second message. The status
+   * change and the publish share a transaction, so a failed publish leaves
+   * the video in `draft` and the call can be retried.
+   */
+  async completeUpload(
+    userId: string,
+    slug: string,
+    parts: CompletedPartInput[],
+  ): Promise<VideoSummaryDto> {
+    const video = await this.findOwnedOrFail(userId, slug);
+    if (video.status === VideoStatus.PROCESSING) {
+      return toVideoSummary(video);
+    }
+    if (video.status !== VideoStatus.DRAFT || !video.upload_id) {
+      throw new VideoInvalidStateException(video.status);
+    }
+
+    // A previous attempt may have assembled the object before failing to publish.
+    let head = await this.storageService.headObject(video.storage_key);
+    if (!head) {
+      await this.storageService.completeMultipartUpload(
+        video.storage_key,
+        video.upload_id,
+        parts,
+      );
+      head = await this.storageService.headObject(video.storage_key);
+    }
+
+    // Part sizes are chosen by the client: enforce the 10 GiB cap on the result.
+    const actualSize = head?.contentLength ?? video.size_bytes;
+    if (actualSize > VIDEO_UPLOAD.MAX_SIZE_BYTES) {
+      await this.videoRepository.update(
+        { id: video.id },
+        {
+          status: VideoStatus.FAILED,
+          upload_id: null,
+          size_bytes: actualSize,
+          processing_error: OVERSIZED_UPLOAD_ERROR,
+        },
+      );
+      return { ...toVideoSummary(video), status: VideoStatus.FAILED };
+    }
+
+    await this.dataSource.transaction(async (manager) => {
+      await manager.update(
+        Video,
+        { id: video.id, status: VideoStatus.DRAFT },
+        {
+          status: VideoStatus.PROCESSING,
+          upload_id: null,
+          size_bytes: actualSize,
+        },
+      );
+      await this.publisher.publishVideoUploaded(video.id);
+    });
+
+    return { ...toVideoSummary(video), status: VideoStatus.PROCESSING };
   }
 
   /** Owner-only access: other users get VIDEO_NOT_FOUND (AMB-1). */

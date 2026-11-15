@@ -1,15 +1,20 @@
 import { Test } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { QueryFailedError } from 'typeorm';
+import { DataSource, QueryFailedError } from 'typeorm';
 import { ChannelsService } from '../channels/channels.service';
 import {
   InvalidPartNumberException,
   VideoInvalidStateException,
   VideoNotFoundException,
 } from '../common/exceptions/domain.exception';
+import { VideoProcessingPublisher } from '../messaging/video-processing.publisher';
 import { StorageService } from '../storage/storage.service';
 import { Video, VideoStatus } from './entities/video.entity';
-import { partCountFor, VideosService } from './videos.service';
+import {
+  OVERSIZED_UPLOAD_ERROR,
+  partCountFor,
+  VideosService,
+} from './videos.service';
 
 function slugCollision(): QueryFailedError {
   const err = new QueryFailedError('INSERT', [], new Error()) as any;
@@ -55,6 +60,8 @@ describe('VideosService', () => {
         { provide: getRepositoryToken(Video), useValue: videoRepository },
         { provide: ChannelsService, useValue: channelsService },
         { provide: StorageService, useValue: storageService },
+        { provide: VideoProcessingPublisher, useValue: {} },
+        { provide: DataSource, useValue: {} },
       ],
     }).compile();
     service = module.get(VideosService);
@@ -152,5 +159,116 @@ describe('VideosService', () => {
         expires_in: 3600,
       });
     });
+  });
+});
+
+describe('VideosService.completeUpload', () => {
+  let service: VideosService;
+  const manager = { update: jest.fn() };
+  const videoRepository = { findOne: jest.fn(), update: jest.fn() };
+  const storageService = {
+    headObject: jest.fn(),
+    completeMultipartUpload: jest.fn(),
+  };
+  const publisher = { publishVideoUploaded: jest.fn() };
+  const dataSource = {
+    transaction: jest.fn((cb: (m: typeof manager) => Promise<void>) =>
+      cb(manager),
+    ),
+  };
+  const parts = [{ part_number: 1, etag: '"e1"' }];
+
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    const module = await Test.createTestingModule({
+      providers: [
+        VideosService,
+        { provide: getRepositoryToken(Video), useValue: videoRepository },
+        { provide: ChannelsService, useValue: {} },
+        { provide: StorageService, useValue: storageService },
+        { provide: VideoProcessingPublisher, useValue: publisher },
+        { provide: DataSource, useValue: dataSource },
+      ],
+    }).compile();
+    service = module.get(VideosService);
+  });
+
+  it('completes the multipart upload, sets processing and publishes once', async () => {
+    videoRepository.findOne.mockResolvedValue(draft());
+    storageService.headObject
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ contentLength: 2048, contentType: 'video/mp4' });
+
+    const result = await service.completeUpload('user-1', 'slug', parts);
+
+    expect(storageService.completeMultipartUpload).toHaveBeenCalledWith(
+      'videos/video-id/original',
+      'upload-1',
+      parts,
+    );
+    expect(manager.update).toHaveBeenCalledWith(
+      Video,
+      { id: 'video-id', status: VideoStatus.DRAFT },
+      { status: VideoStatus.PROCESSING, upload_id: null, size_bytes: 2048 },
+    );
+    expect(publisher.publishVideoUploaded).toHaveBeenCalledWith('video-id');
+    expect(result.status).toBe(VideoStatus.PROCESSING);
+  });
+
+  it('is idempotent while processing: returns without publishing again', async () => {
+    videoRepository.findOne.mockResolvedValue(
+      draft({ status: VideoStatus.PROCESSING, upload_id: null }),
+    );
+
+    const result = await service.completeUpload('user-1', 'slug', parts);
+
+    expect(result.status).toBe(VideoStatus.PROCESSING);
+    expect(storageService.completeMultipartUpload).not.toHaveBeenCalled();
+    expect(publisher.publishVideoUploaded).not.toHaveBeenCalled();
+  });
+
+  it.each([VideoStatus.READY, VideoStatus.FAILED])(
+    'rejects a video in status %s with VIDEO_INVALID_STATE',
+    async (status) => {
+      videoRepository.findOne.mockResolvedValue(
+        draft({ status, upload_id: null }),
+      );
+      await expect(
+        service.completeUpload('user-1', 'slug', parts),
+      ).rejects.toBeInstanceOf(VideoInvalidStateException);
+    },
+  );
+
+  it('skips the storage completion when a previous attempt already assembled the object', async () => {
+    videoRepository.findOne.mockResolvedValue(draft());
+    storageService.headObject.mockResolvedValue({
+      contentLength: 2048,
+      contentType: 'video/mp4',
+    });
+
+    await service.completeUpload('user-1', 'slug', parts);
+
+    expect(storageService.completeMultipartUpload).not.toHaveBeenCalled();
+    expect(publisher.publishVideoUploaded).toHaveBeenCalledTimes(1);
+  });
+
+  it('marks an assembled file above 10 GiB as failed without publishing', async () => {
+    videoRepository.findOne.mockResolvedValue(draft());
+    storageService.headObject.mockResolvedValue({
+      contentLength: 10737418241,
+      contentType: 'video/mp4',
+    });
+
+    const result = await service.completeUpload('user-1', 'slug', parts);
+
+    expect(result.status).toBe(VideoStatus.FAILED);
+    expect(videoRepository.update).toHaveBeenCalledWith(
+      { id: 'video-id' },
+      expect.objectContaining({
+        status: VideoStatus.FAILED,
+        processing_error: OVERSIZED_UPLOAD_ERROR,
+      }),
+    );
+    expect(publisher.publishVideoUploaded).not.toHaveBeenCalled();
   });
 });

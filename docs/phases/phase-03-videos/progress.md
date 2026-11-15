@@ -1,7 +1,7 @@
 # phase-03-videos — Progress
 
 **Status:** in_progress
-**SIs:** 5/9 completed
+**SIs:** 6/9 completed
 
 ### SI-03.1 — Infraestrutura: storage, broker, FFmpeg e configuração
 - **Status:** completed
@@ -43,9 +43,11 @@
   - E2E users are created directly in the DB and authenticated with a JWT signed by the app's JwtService (test/helpers/videos-e2e.ts); auth flows are already covered by auth.e2e-spec.ts.
 
 ### SI-03.6 — Conclusão do upload e disparo do processamento
-- **Status:** pending
-- **Tests:** —
-- **Observations:** none
+- **Status:** completed
+- **Tests:** 38 passing in the videos suites — videos.service.spec.ts (15 unit), videos.service.integration-spec.ts (5, Postgres + MinIO + RabbitMQ), videos.module.spec.ts (1), test/videos.e2e-spec.ts (14 e2e)
+- **Observations:** 
+  - Status change to processing and the publish share a DB transaction: a failed publish rolls the video back to draft, and a retried complete skips the storage completion when the object is already assembled (HeadObject). This implements TD-09 'keep the request retryable' and is covered by an integration test with a forced broker failure.
+  - The assembled file size is checked against 10 GiB after completion (clients choose the part sizes); an oversized file ends in failed with processing_error, without a message.
 
 ### SI-03.7 — Video worker: metadados, thumbnail e ciclo de status
 - **Status:** pending

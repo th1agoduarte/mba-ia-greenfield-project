@@ -19,12 +19,14 @@ import { SkipThrottle } from '@nestjs/throttler';
 import type { JwtPayload } from '../auth/auth.types';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { ApiErrorEnvelope } from '../common/openapi/api-error-envelope.dto';
+import { CompleteUploadDto } from './dto/complete-upload.dto';
 import { CreateVideoDto } from './dto/create-video.dto';
 import { PartUrlsDto } from './dto/part-urls.dto';
 import {
   InitiatedUploadDto,
   PartUrlsResponseDto,
   UploadedPartsResponseDto,
+  VideoSummaryDto,
 } from './dto/video-response.dto';
 import { VideosService } from './videos.service';
 
@@ -118,6 +120,37 @@ export class VideosController {
     @Param('slug') slug: string,
   ): Promise<UploadedPartsResponseDto> {
     return this.videosService.listUploadedParts(user.sub, slug);
+  }
+
+  @Post(':slug/upload/complete')
+  @HttpCode(HttpStatus.ACCEPTED)
+  @ApiOperation({
+    summary: 'Complete an upload and start processing',
+    description:
+      'Completes the multipart upload, sets the video to processing and enqueues it for the worker. Idempotent while processing.',
+  })
+  @ApiResponse({
+    status: 202,
+    description: 'Processing started',
+    type: VideoSummaryDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid body or parts rejected by the storage',
+    schema: ERROR,
+  })
+  @ApiResponse({ status: 404, description: 'Video not found', schema: ERROR })
+  @ApiResponse({
+    status: 409,
+    description: 'Video is ready or failed',
+    schema: ERROR,
+  })
+  complete(
+    @CurrentUser() user: JwtPayload,
+    @Param('slug') slug: string,
+    @Body() dto: CompleteUploadDto,
+  ): Promise<VideoSummaryDto> {
+    return this.videosService.completeUpload(user.sub, slug, dto.parts);
   }
 
   @Delete(':slug/upload')

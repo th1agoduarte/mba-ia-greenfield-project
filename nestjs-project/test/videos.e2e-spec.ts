@@ -189,4 +189,70 @@ describe('Videos (e2e)', () => {
       }
     });
   });
+
+  describe('POST /videos/:slug/upload/complete', () => {
+    async function uploadedDraft() {
+      const { slug, id } = await createDraft();
+      const urls = await http()
+        .post(`/videos/${slug}/upload/part-urls`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ part_numbers: [1] })
+        .expect(200);
+      const etag = await putPart(urls.body.urls[0].url, randomBytes(4096));
+      return { slug, id, etag };
+    }
+
+    it('completes the upload and answers 202 processing (idempotent)', async () => {
+      const { slug, etag } = await uploadedDraft();
+
+      for (let i = 0; i < 2; i++) {
+        const res = await http()
+          .post(`/videos/${slug}/upload/complete`)
+          .set('Authorization', `Bearer ${token}`)
+          .send({ parts: [{ part_number: 1, etag }] })
+          .expect(202);
+        expect(res.body).toMatchObject({ slug, status: 'processing' });
+      }
+    });
+
+    it('rejects parts the storage does not know with INVALID_UPLOAD_PARTS', async () => {
+      const { slug, id } = await uploadedDraft();
+
+      const res = await http()
+        .post(`/videos/${slug}/upload/complete`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          parts: [
+            { part_number: 1, etag: '"0123456789abcdef0123456789abcdef"' },
+          ],
+        })
+        .expect(400);
+
+      expect(res.body.error).toBe('INVALID_UPLOAD_PARTS');
+      const [row] = await ctx.dataSource.query(
+        'SELECT status FROM videos WHERE id = $1',
+        [id],
+      );
+      expect(row.status).toBe('draft');
+    });
+
+    it('validates the parts list', async () => {
+      const { slug } = await createDraft();
+      const res = await http()
+        .post(`/videos/${slug}/upload/complete`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ parts: [{ part_number: 0, etag: '' }] })
+        .expect(400);
+      expect(res.body.error).toBe('VALIDATION_ERROR');
+    });
+
+    it('answers 404 to another user', async () => {
+      const { slug, etag } = await uploadedDraft();
+      await http()
+        .post(`/videos/${slug}/upload/complete`)
+        .set('Authorization', `Bearer ${otherToken}`)
+        .send({ parts: [{ part_number: 1, etag }] })
+        .expect(404);
+    });
+  });
 });

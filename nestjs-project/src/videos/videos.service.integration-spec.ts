@@ -13,8 +13,11 @@ import {
   cleanAllTables,
   createTestDataSource,
 } from '../test/create-test-data-source';
+import { videoProcessingTopology } from '../messaging/messaging.constants';
+import { VideoProcessingPublisher } from '../messaging/video-processing.publisher';
 import {
   deleteQueueNamespace,
+  drainQueue,
   useIsolatedQueueNamespaceForTests,
 } from '../test/messaging';
 import { useInternalStorageEndpointForTests } from '../test/storage';
@@ -113,5 +116,65 @@ describe('VideosService (integration — Postgres + MinIO)', () => {
 
     expect(await videoRepository.countBy({ id })).toBe(0);
     await expect(storage.listParts(storage_key, upload_id!)).rejects.toThrow();
+  });
+
+  async function uploadOnePart(slug: string): Promise<string> {
+    const { urls } = await service.presignParts(userId, slug, [1]);
+    const res = await fetch(urls[0].url, {
+      method: 'PUT',
+      body: new Uint8Array(randomBytes(2048)),
+    });
+    return res.headers.get('etag') ?? '';
+  }
+
+  it('completes the upload: object assembled, status processing, one video.uploaded message', async () => {
+    const { slug, id } = await service.initiateUpload(userId, dto);
+    const etag = await uploadOnePart(slug);
+
+    const result = await service.completeUpload(userId, slug, [
+      { part_number: 1, etag },
+    ]);
+
+    expect(result.status).toBe(VideoStatus.PROCESSING);
+    const video = await videoRepository.findOneByOrFail({ id });
+    expect(video.status).toBe(VideoStatus.PROCESSING);
+    expect(video.upload_id).toBeNull();
+    expect((await storage.headObject(video.storage_key))?.contentLength).toBe(
+      2048,
+    );
+    const messages = await drainQueue(videoProcessingTopology(namespace).queue);
+    expect(messages).toEqual([
+      { body: { video_id: id }, headers: { 'x-attempt': 1 } },
+    ]);
+
+    await service.completeUpload(userId, slug, [{ part_number: 1, etag }]);
+    expect(
+      await drainQueue(videoProcessingTopology(namespace).queue),
+    ).toHaveLength(0);
+  });
+
+  it('keeps the video in draft when publishing fails, and a retry succeeds', async () => {
+    const { slug, id } = await service.initiateUpload(userId, dto);
+    const etag = await uploadOnePart(slug);
+    const publisher = module.get(VideoProcessingPublisher);
+    const spy = jest
+      .spyOn(publisher, 'publishVideoUploaded')
+      .mockRejectedValueOnce(new Error('broker unavailable'));
+
+    await expect(
+      service.completeUpload(userId, slug, [{ part_number: 1, etag }]),
+    ).rejects.toThrow('broker unavailable');
+    expect((await videoRepository.findOneByOrFail({ id })).status).toBe(
+      VideoStatus.DRAFT,
+    );
+
+    spy.mockRestore();
+    await service.completeUpload(userId, slug, [{ part_number: 1, etag }]);
+    expect((await videoRepository.findOneByOrFail({ id })).status).toBe(
+      VideoStatus.PROCESSING,
+    );
+    expect(
+      await drainQueue(videoProcessingTopology(namespace).queue),
+    ).toHaveLength(1);
   });
 });
