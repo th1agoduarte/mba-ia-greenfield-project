@@ -82,7 +82,8 @@ export class VideosController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Get presigned part upload URLs',
-    description: 'Returns presigned PUT URLs (1 h) for up to 100 parts.',
+    description:
+      'Returns presigned PUT URLs (1 h) for up to 100 parts. Each URL is signed for the exact part size (64 MiB, the last part carries the remainder of the declared file_size); the storage rejects a body of any other size.',
   })
   @ApiResponse({
     status: 200,
@@ -138,7 +139,7 @@ export class VideosController {
   @ApiOperation({
     summary: 'Complete an upload and start processing',
     description:
-      'Completes the multipart upload, sets the video to processing and enqueues it for the worker. Idempotent while processing.',
+      'Completes the multipart upload, sets the video to processing and enqueues it for the worker. Repeatable: calling it again while processing re-enqueues the job (the worker ignores duplicates).',
   })
   @ApiResponse({
     status: 202,
