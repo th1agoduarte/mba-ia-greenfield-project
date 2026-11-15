@@ -48,3 +48,13 @@ export class TokenReuseDetectedException extends DomainException {
     );
   }
 }
+
+export class InvalidUploadPartsException extends DomainException {
+  constructor() {
+    super(
+      'INVALID_UPLOAD_PARTS',
+      400,
+      'The uploaded parts do not match the storage upload (missing part, wrong ETag or order)',
+    );
+  }
+}

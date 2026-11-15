@@ -1,7 +1,7 @@
 # phase-03-videos — Progress
 
 **Status:** in_progress
-**SIs:** 2/9 completed
+**SIs:** 3/9 completed
 
 ### SI-03.1 — Infraestrutura: storage, broker, FFmpeg e configuração
 - **Status:** completed
@@ -20,9 +20,11 @@
   - cleanAllTables deletes videos only when the table exists (to_regclass), so suites that run on a fresh DB before any migration still work.
 
 ### SI-03.3 — StorageModule (S3/MinIO)
-- **Status:** pending
-- **Tests:** —
-- **Observations:** none
+- **Status:** completed
+- **Tests:** 6/6 passing (storage.service.integration-spec.ts against real MinIO, storage.module.spec.ts)
+- **Observations:** 
+  - Two S3 clients: internal endpoint for server calls, public endpoint only for signing; tests sign for the internal endpoint through src/test/storage.ts (useInternalStorageEndpointForTests).
+  - requestChecksumCalculation/responseChecksumValidation set to WHEN_REQUIRED as recorded in library-refs.md; presigned PUT/GET work from a plain fetch client.
 
 ### SI-03.4 — MessagingModule (RabbitMQ): topologia, publisher e consumer
 - **Status:** pending
