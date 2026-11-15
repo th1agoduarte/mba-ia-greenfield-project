@@ -19,12 +19,21 @@ This is a monorepo with two main areas:
 See `docs/diagrams/software-arch.mermaid` for the full diagram. Key containers:
 
 - **Frontend** (Next.js) → calls API via REST, streams from Object Storage
-- **API** (Nest.js) → business rules, auth, reads/writes DB, uploads to storage, publishes jobs to queue, sends emails
-- **Video Worker** (FFmpeg) → consumes jobs from queue, processes videos, updates DB and storage
-- **Database** (PostgreSQL) → users, channels, videos, comments, likes
-- **Object Storage** (S3/MinIO) → video files and thumbnails
-- **Message Queue** (TBD) → video processing job queue
+- **API** (Nest.js) → business rules, auth, reads/writes DB, signs storage URLs (clients upload/stream directly to storage), publishes jobs to queue, sends emails
+- **Video Worker** (FFmpeg) → consumes jobs from queue, processes videos, updates DB and storage — `nestjs-project/src/worker.ts`, Compose service `video-worker`
+- **Database** (PostgreSQL) → users, channels, videos (comments and likes in later phases)
+- **Object Storage** (S3/MinIO) → video files and thumbnails — Compose service `minio` (bucket created by `minio-init`)
+- **Message Queue** (RabbitMQ) → video processing job queue — Compose service `rabbitmq`
 - **Email Service** (SMTP) → account confirmation and password recovery
+
+## Videos (Phase 03)
+
+Upload and processing of videos live in `nestjs-project/` (details, endpoints and commands in `nestjs-project/CLAUDE.md`; decisions in `docs/decisions/technical-decisions-phase-03-videos.md`; plan and progress in `docs/phases/phase-03-videos/`):
+
+- **Upload up to 10 GiB without passing through the API:** `POST /videos` pre-registers the video as `draft` and opens an S3 multipart upload; the client `PUT`s 64 MiB parts straight to the object storage with presigned URLs, then calls `POST /videos/{slug}/upload/complete`.
+- **Processing:** "complete" sets `processing` and publishes `video.uploaded` to RabbitMQ; the `video-worker` runs `ffprobe` (duration, metadata) and `ffmpeg` (thumbnail at 10% of the duration) on a presigned URL and sets `ready` — or `failed` after 3 attempts / a non-retryable error.
+- **Unique URL:** 11-character random base64url `slug`, unique in the DB.
+- **Streaming and download:** `GET /videos/{slug}/stream` and `/download` answer `302` to presigned storage URLs (Range → `206 Partial Content`; download as attachment). All video routes are owner-only in this phase.
 
 ## Docker Networking
 

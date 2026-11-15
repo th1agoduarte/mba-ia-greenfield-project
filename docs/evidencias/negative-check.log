@@ -1,0 +1,54 @@
+(node:39894) Warning: `--localstorage-file` was provided without a valid path
+(Use `node --trace-warnings ...` to show where the warning was created)
+FAIL test/videos.e2e-spec.ts
+  Videos (e2e)
+    POST /videos
+      ✕ accepts exactly 10 GiB and rejects anything larger (130 ms)
+      ○ skipped creates a draft with an 11-char slug and the upload instructions
+      ○ skipped rejects a non-video content type
+      ○ skipped requires authentication
+      ○ skipped gives two videos different slugs
+    upload parts
+      ○ skipped signs part URLs on the storage, lists stored parts and resumes
+      ○ skipped rejects a part number beyond the part count
+      ○ skipped validates part_numbers
+      ○ skipped cancels the upload and removes the draft
+    ownership
+      ○ skipped answers 404 VIDEO_NOT_FOUND to another user on every upload route
+    POST /videos/:slug/upload/complete
+      ○ skipped completes the upload and answers 202 processing (idempotent)
+      ○ skipped rejects parts the storage does not know with INVALID_UPLOAD_PARTS
+      ○ skipped validates the parts list
+      ○ skipped answers 404 to another user
+    GET /videos/:slug, stream and download before processing
+      ○ skipped returns the draft details to the owner and 404 to others
+      ○ skipped answers 409 VIDEO_NOT_READY to stream and download of a video not ready
+      ○ skipped answers 404 for an unknown slug
+
+  ● Videos (e2e) › POST /videos › accepts exactly 10 GiB and rejects anything larger
+
+    expected 201 "Created", got 400 "Bad Request"
+
+      79 |         .set('Authorization', `Bearer ${token}`)
+      80 |         .send({ ...validBody, file_size: 10737418240 })
+    > 81 |         .expect(201)
+         |          ^
+      82 |         .expect((res) => expect(res.body.upload.part_count).toBe(160));
+      83 |
+      84 |       const res = await http()
+
+      at Object.<anonymous> (videos.e2e-spec.ts:81:10)
+      ----
+      at Test._assertStatus (../node_modules/supertest/lib/test.js:309:14)
+      at ../node_modules/supertest/lib/test.js:365:13
+      at Test._assertFunction (../node_modules/supertest/lib/test.js:342:13)
+      at Test.assert (../node_modules/supertest/lib/test.js:195:23)
+      at localAssert (../node_modules/supertest/lib/test.js:138:14)
+      at Server.<anonymous> (../node_modules/supertest/lib/test.js:152:11)
+
+Test Suites: 1 failed, 1 total
+Tests:       1 failed, 16 skipped, 17 total
+Snapshots:   0 total
+Time:        3.46 s
+Ran all test suites matching test/videos.e2e-spec.ts with tests matching "10 GiB".
+negative check rc=1 (esperado != 0)

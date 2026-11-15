@@ -37,87 +37,60 @@ How each external system is handled in tests. These strategies were confirmed wi
 
 ---
 
-## Object Storage — Local Filesystem
+## Object Storage — Real MinIO (Docker)
 
-**Strategy:** Local filesystem storage in development and tests. S3 in production.
+**Strategy:** Real S3-compatible storage — the `minio` service in `compose.yaml` (bucket created by the one-shot `minio-init`). S3 in production; same API (decided in `phase-03-videos/TD-03`, `TD-10`).
 
 **Approach:**
-- The storage layer should use an abstraction (e.g., `StorageService` interface) that allows switching between local filesystem and S3
-- In tests, use the local filesystem adapter — no mocking needed
-- Use a temporary directory for test uploads: `os.tmpdir()` or a dedicated `test-uploads/` directory
-- Clean up test files in `afterAll`
-
-**Setup pattern:**
-```typescript
-// In test module setup
-{
-  provide: 'STORAGE_CONFIG',
-  useValue: {
-    driver: 'local',
-    basePath: path.join(os.tmpdir(), 'streamtube-test-uploads'),
-  },
-}
-```
+- `StorageService` (`src/storage/`) talks to MinIO through the AWS SDK v3 — no local-filesystem adapter, no mocks in integration/e2e tests
+- Presigned URLs embed the host they were signed for. Tests run inside the Compose network, so call `useInternalStorageEndpointForTests()` (`src/test/storage.ts`) **before** compiling the module: it signs for `S3_ENDPOINT` (`http://minio:9000`) instead of the host-facing `S3_PUBLIC_ENDPOINT`
+- Use unique keys per test (`test/<uuid>/...`) instead of cleaning the bucket
+- Video fixtures: `test/fixtures/sample.mp4` (2 s, H.264 + AAC) via `readSampleVideo()` (`src/test/fixtures.ts`)
 
 **Integration test:**
+
 ```typescript
-import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
+beforeAll(async () => {
+  useInternalStorageEndpointForTests();
+  module = await Test.createTestingModule({
+    imports: [ConfigModule.forRoot({ isGlobal: true, load: [storageConfig] }), StorageModule],
+  }).compile();
+  storage = module.get(StorageService);
+});
 
-describe('StorageService (integration)', () => {
-  const testDir = path.join(os.tmpdir(), 'streamtube-test-uploads');
-
-  afterAll(() => {
-    fs.rmSync(testDir, { recursive: true, force: true });
-  });
-
-  it('should upload and retrieve a file', async () => {
-    const buffer = Buffer.from('test content');
-    const key = await storageService.upload(buffer, 'test.txt');
-
-    const retrieved = await storageService.get(key);
-    expect(retrieved.toString()).toBe('test content');
-  });
+it('serves a presigned GET with Range as 206', async () => {
+  const key = `test/${randomUUID()}/original`;
+  await storage.putObject(key, body, 'video/mp4');
+  const res = await fetch(await storage.presignGetObject(key), { headers: { Range: 'bytes=0-99' } });
+  expect(res.status).toBe(206);
 });
 ```
 
 ---
 
-## Message Queue — Real (Docker)
+## Message Queue — Real RabbitMQ (Docker)
 
-**Strategy:** Real message broker in Docker. The specific technology is TBD per the architecture diagram (likely BullMQ with Redis or RabbitMQ).
+**Strategy:** Real broker — the `rabbitmq` service in `compose.yaml` (decided in `phase-03-videos/TD-01`, `TD-11`, `TD-12`).
 
-**When the queue technology is chosen, configure:**
-- A queue broker service in `compose.yaml` (e.g., Redis for BullMQ, RabbitMQ for AMQP)
-- Test isolation: use dedicated test queues or clean queues between tests
-- For publisher tests: assert the job is enqueued with correct data
-- For consumer tests: submit a job and assert the processing outcome
+**Test isolation:**
+- The long-running `video-worker` container consumes the default namespace (`RABBITMQ_NAMESPACE=videos`). Tests must never publish there: call `useIsolatedQueueNamespaceForTests(label)` (`src/test/messaging.ts`) **before** compiling the module — it sets a throwaway namespace and a short retry TTL — and `deleteQueueNamespace(namespace)` in `afterAll`
+- For publisher tests: `drainQueue(videoProcessingTopology(ns).queue)` and assert the message body/headers
+- For consumer tests: start the consumer with a handler, publish, and `waitFor(...)` the outcome
+- E2E of the whole pipeline: load `VideoProcessingModule` into the same app as `AppModule` (`createVideosE2EApp(label, [VideoProcessingModule])` in `test/helpers/videos-e2e.ts`) — two TypeORM roots in one process break the default DataSource
 
-**Setup pattern (BullMQ example):**
-```typescript
-// In test module
-BullModule.forRoot({
-  connection: {
-    host: process.env.REDIS_HOST ?? 'localhost',
-    port: Number(process.env.REDIS_PORT ?? 6379),
-  },
-}),
-BullModule.registerQueue({ name: 'video-processing' }),
-```
+**Setup pattern:**
 
 ```typescript
-describe('VideoService (integration - queue)', () => {
-  it('should enqueue a processing job on upload', async () => {
-    await videoService.upload(videoData);
+beforeEach(async () => {
+  namespace = useIsolatedQueueNamespaceForTests('messaging');
+  module = await Test.createTestingModule({
+    imports: [ConfigModule.forRoot({ isGlobal: true, load: [messagingConfig] }), MessagingModule],
+  }).compile();
+});
 
-    const queue = module.get<Queue>(getQueueToken('video-processing'));
-    const jobs = await queue.getJobs(['waiting']);
-    expect(jobs).toHaveLength(1);
-    expect(jobs[0].data).toEqual(
-      expect.objectContaining({ videoId: expect.any(String) }),
-    );
-  });
+afterEach(async () => {
+  await module.close();
+  await deleteQueueNamespace(namespace);
 });
 ```
 

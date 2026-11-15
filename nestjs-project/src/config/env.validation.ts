@@ -21,4 +21,17 @@ export const envValidationSchema = Joi.object({
   MAIL_PORT: Joi.number().default(1025),
   MAIL_FROM: Joi.string().default('"StreamTube" <noreply@streamtube.com>'),
   SWAGGER_ENABLED: Joi.string().valid('true', 'false').default('false'),
+  S3_ENDPOINT: Joi.string().uri().required(),
+  S3_PUBLIC_ENDPOINT: Joi.string().uri().required(),
+  S3_REGION: Joi.string().default('us-east-1'),
+  S3_ACCESS_KEY: Joi.string().required(),
+  S3_SECRET_KEY: Joi.string().required(),
+  S3_BUCKET: Joi.string().required(),
+  S3_PRESIGN_EXPIRES_SECONDS: Joi.number().integer().min(60).default(3600),
+  RABBITMQ_URL: Joi.string()
+    .uri({ scheme: ['amqp', 'amqps'] })
+    .required(),
+  RABBITMQ_NAMESPACE: Joi.string().default('videos'),
+  VIDEO_PROCESSING_RETRY_DELAY_MS: Joi.number().integer().min(0).default(5000),
+  VIDEO_PROCESSING_MAX_ATTEMPTS: Joi.number().integer().min(1).default(3),
 });

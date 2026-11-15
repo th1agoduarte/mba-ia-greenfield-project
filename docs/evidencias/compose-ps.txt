@@ -1,0 +1,8 @@
+SERVICE        IMAGE                                      STATUS
+db             postgres:17                                Up 2 hours (healthy)
+mailpit        axllent/mailpit                            Up 2 hours (healthy)
+minio          pgsty/minio:RELEASE.2026-08-04T00-00-00Z   Up 41 minutes (healthy)
+minio-init     pgsty/mc:RELEASE.2026-10-26T00-00-00Z      Exited (0) 20 minutes ago
+nestjs-api     nestjs-project-nestjs-api                  Up 41 minutes
+rabbitmq       rabbitmq:4.2.9-management-alpine           Up 41 minutes (healthy)
+video-worker   nestjs-project-video-worker                Up 20 minutes

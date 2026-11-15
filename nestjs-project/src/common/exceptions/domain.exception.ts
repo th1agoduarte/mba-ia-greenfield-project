@@ -48,3 +48,45 @@ export class TokenReuseDetectedException extends DomainException {
     );
   }
 }
+
+export class InvalidUploadPartsException extends DomainException {
+  constructor() {
+    super(
+      'INVALID_UPLOAD_PARTS',
+      400,
+      'The uploaded parts do not match the storage upload (missing part, wrong ETag or order)',
+    );
+  }
+}
+
+export class VideoNotFoundException extends DomainException {
+  constructor() {
+    super('VIDEO_NOT_FOUND', 404, 'Video not found');
+  }
+}
+
+export class VideoInvalidStateException extends DomainException {
+  constructor(status: string) {
+    super(
+      'VIDEO_INVALID_STATE',
+      409,
+      `Operation not allowed for a video in status "${status}"`,
+    );
+  }
+}
+
+export class VideoNotReadyException extends DomainException {
+  constructor() {
+    super('VIDEO_NOT_READY', 409, 'Video is not ready yet');
+  }
+}
+
+export class InvalidPartNumberException extends DomainException {
+  constructor(partCount: number) {
+    super(
+      'INVALID_PART_NUMBER',
+      400,
+      `Part numbers must be between 1 and ${partCount}`,
+    );
+  }
+}
