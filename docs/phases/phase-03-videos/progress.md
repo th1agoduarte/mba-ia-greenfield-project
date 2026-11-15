@@ -1,7 +1,7 @@
 # phase-03-videos — Progress
 
 **Status:** in_progress
-**SIs:** 4/9 completed
+**SIs:** 5/9 completed
 
 ### SI-03.1 — Infraestrutura: storage, broker, FFmpeg e configuração
 - **Status:** completed
@@ -35,9 +35,12 @@
   - Tests use a throwaway namespace per test (src/test/messaging.ts) with a 200 ms retry TTL and delete the queues afterwards.
 
 ### SI-03.5 — Início do upload: rascunho, URLs de partes, retomada e cancelamento
-- **Status:** pending
-- **Tests:** —
-- **Observations:** none
+- **Status:** completed
+- **Tests:** 26 passing — videos.service.spec.ts (9 unit), videos.service.integration-spec.ts (3, Postgres + MinIO), videos.module.spec.ts (1), test/videos.e2e-spec.ts (10 e2e)
+- **Observations:** 
+  - Added ChannelsService.findByUserId so VideosService resolves the caller's channel through the channels module instead of reading the channels table itself (single responsibility).
+  - If saving the draft fails after the multipart upload was opened, the upload is aborted (compensation), covered by a unit test.
+  - E2E users are created directly in the DB and authenticated with a JWT signed by the app's JwtService (test/helpers/videos-e2e.ts); auth flows are already covered by auth.e2e-spec.ts.
 
 ### SI-03.6 — Conclusão do upload e disparo do processamento
 - **Status:** pending
