@@ -21,9 +21,13 @@ function fakeChannel() {
   };
 }
 
-function message(headers: Record<string, unknown>): ConsumeMessage {
+function message(
+  headers: Record<string, unknown>,
+  redelivered = false,
+): ConsumeMessage {
   return {
     content: Buffer.from(JSON.stringify({ video_id: 'v1' })),
+    fields: { redelivered },
     properties: { headers },
   } as unknown as ConsumeMessage;
 }
@@ -89,5 +93,53 @@ describe('VideoProcessingConsumer', () => {
 
     expect(channel.nack).toHaveBeenCalledWith(expect.anything(), false, true);
     expect(channel.ack).not.toHaveBeenCalled();
+  });
+
+  describe('redelivery (an earlier delivery was never settled, e.g. worker crash)', () => {
+    it('counts it as an attempt: retry queue with x-attempt + 1, without running the handler', async () => {
+      channel.deliver(message({ 'x-attempt': 1 }, true));
+      await flush();
+
+      expect(handler).not.toHaveBeenCalled();
+      expect(channel.sendToQueue).toHaveBeenCalledWith(
+        'ns.processing.retry',
+        { video_id: 'v1' },
+        expect.objectContaining({ headers: { 'x-attempt': 2 } }),
+      );
+      expect(channel.ack).toHaveBeenCalled();
+    });
+
+    it('parks it when the redelivered attempt was the last one', async () => {
+      channel.deliver(message({ 'x-attempt': 3 }, true));
+      await flush();
+
+      expect(handler).not.toHaveBeenCalled();
+      expect(channel.sendToQueue).toHaveBeenCalledWith(
+        'ns.processing.dead',
+        { video_id: 'v1' },
+        expect.objectContaining({ headers: { 'x-attempt': 3 } }),
+      );
+      expect(channel.ack).toHaveBeenCalled();
+    });
+
+    it('bounds the nack-requeue loop: the requeued delivery moves on to the next attempt', async () => {
+      handler.mockResolvedValue('retry');
+      channel.sendToQueue.mockRejectedValueOnce(new Error('confirm timeout'));
+      channel.deliver(message({ 'x-attempt': 2 }));
+      await flush();
+      expect(channel.nack).toHaveBeenCalledTimes(1);
+
+      // RabbitMQ hands the nacked message back with redelivered = true.
+      channel.deliver(message({ 'x-attempt': 2 }, true));
+      await flush();
+
+      expect(handler).toHaveBeenCalledTimes(1);
+      expect(channel.sendToQueue).toHaveBeenLastCalledWith(
+        'ns.processing.retry',
+        { video_id: 'v1' },
+        expect.objectContaining({ headers: { 'x-attempt': 3 } }),
+      );
+      expect(channel.ack).toHaveBeenCalledTimes(1);
+    });
   });
 });
