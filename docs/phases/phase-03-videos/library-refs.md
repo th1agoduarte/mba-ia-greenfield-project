@@ -13,8 +13,8 @@ libs:
     context7_id: "/amqp-node/amqplib"
     fetched_at: "2026-11-15T13:30:00-03:00"
   amqp-connection-manager:
-    version: "^5.0.1"
-    context7_id: "— (not indexed by Context7; README from the npm registry, 5.0.1)"
+    version: "^4.1.15"
+    context7_id: "— (not indexed by Context7; README from the npm registry)"
     fetched_at: "2026-11-15T13:30:00-03:00"
 sources_mtime:
   docs/decisions/technical-decisions-phase-03-videos.md: "2026-11-15T13:27:49-03:00"
@@ -116,7 +116,9 @@ ch.publish('videos', 'video.uploaded', Buffer.from(JSON.stringify(payload)), {
 
 ## amqp-connection-manager
 
-**Source:** npm README of `amqp-connection-manager@5.0.1` (package not indexed by Context7 — discrepancy flagged per CLAUDE.md "Library Documentation Lookup"). Peer dependency `amqplib: *`; ships types.
+**Source:** npm README of `amqp-connection-manager` (package not indexed by Context7 — discrepancy flagged per CLAUDE.md "Library Documentation Lookup"). Peer dependency `amqplib: *`; ships types (the connection type is exported as `AmqpConnectionManager`).
+
+**Version note (TD-11 Revision, SI-03.4):** pinned to `^4.1.15`. Version 5.x depends on `promise-breaker@7`, which is ESM-only (`"type": "module"`); Node 25 loads it, but Jest's CommonJS runtime fails with `SyntaxError: Unexpected token 'export'`. The 4.x API used here (`connect`, `createChannel({ json, setup })`, `publish`/`sendToQueue` with `timeout`, `consume(queue, onMessage, { prefetch })`, `ack`, `waitForConnect`, `close`) is the same. With `json: true`, `publish`/`sendToQueue` JSON-encode the payload, so pass plain objects, never a `Buffer`.
 
 ```ts
 import * as amqp from 'amqp-connection-manager';

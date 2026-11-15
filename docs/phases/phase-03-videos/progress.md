@@ -1,7 +1,7 @@
 # phase-03-videos — Progress
 
 **Status:** in_progress
-**SIs:** 3/9 completed
+**SIs:** 4/9 completed
 
 ### SI-03.1 — Infraestrutura: storage, broker, FFmpeg e configuração
 - **Status:** completed
@@ -27,9 +27,12 @@
   - requestChecksumCalculation/responseChecksumValidation set to WHEN_REQUIRED as recorded in library-refs.md; presigned PUT/GET work from a plain fetch client.
 
 ### SI-03.4 — MessagingModule (RabbitMQ): topologia, publisher e consumer
-- **Status:** pending
-- **Tests:** —
-- **Observations:** none
+- **Status:** completed
+- **Tests:** 5/5 passing (video-processing.integration-spec.ts against real RabbitMQ, messaging.module.spec.ts), 2 consecutive runs
+- **Observations:** 
+  - amqp-connection-manager 5.x pulls the ESM-only promise-breaker 7, which Jest's CommonJS runtime cannot load; pinned ^4.1.15 (same API) and recorded it as a Revision on TD-11 and in library-refs.md.
+  - The consumer channel runs in JSON mode, so retry/dead forwarding sends the parsed body; the first version forwarded the raw Buffer and the test caught the JSON-encoded Buffer.
+  - Tests use a throwaway namespace per test (src/test/messaging.ts) with a 200 ms retry TTL and delete the queues afterwards.
 
 ### SI-03.5 — Início do upload: rascunho, URLs de partes, retomada e cancelamento
 - **Status:** pending

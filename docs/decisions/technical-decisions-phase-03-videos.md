@@ -378,6 +378,9 @@ _Research sources:_ Context7 (`/nestjs/docs.nestjs.com` queues recipe, `/taskfor
 
 **Libraries:** amqplib, amqp-connection-manager
 
+
+**Revisions:**
+- 2026-11-15 — `amqp-connection-manager` pinned to the **4.x** line (`^4.1.15`, same API) instead of 5.x. Rationale: 5.x depends on `promise-breaker` 7, which is ESM-only and cannot be loaded by Jest's CommonJS runtime used by the project; 4.1.15 (2025-09) depends on the CJS `promise-breaker` 6. Found during SI-03.4.
 ---
 
 ## TD-12: Messaging Topology, Retry Policy and Idempotent Consumer
