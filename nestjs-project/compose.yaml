@@ -17,6 +17,32 @@ services:
       rabbitmq:
         condition: service_healthy
 
+  # Video worker (FFmpeg): same image and source as the API, separate process
+  # that consumes the RabbitMQ queue (phase-03-videos/TD-05). It waits for the
+  # dependencies installed by `docker compose exec nestjs-api npm install`.
+  video-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    command:
+      - sh
+      - -c
+      - >-
+        until [ -e node_modules/.bin/ts-node ]; do
+        echo "video-worker: waiting for node_modules (run: docker compose exec nestjs-api npm install)";
+        sleep 5; done;
+        npm run start:worker:dev
+    volumes:
+      - .:/home/node/app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+      rabbitmq:
+        condition: service_healthy
+
   db:
     image: postgres:17
     ports:

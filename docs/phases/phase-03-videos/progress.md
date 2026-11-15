@@ -1,7 +1,7 @@
 # phase-03-videos — Progress
 
 **Status:** in_progress
-**SIs:** 6/9 completed
+**SIs:** 7/9 completed
 
 ### SI-03.1 — Infraestrutura: storage, broker, FFmpeg e configuração
 - **Status:** completed
@@ -50,9 +50,14 @@
   - The assembled file size is checked against 10 GiB after completion (clients choose the part sizes); an oversized file ends in failed with processing_error, without a message.
 
 ### SI-03.7 — Video worker: metadados, thumbnail e ciclo de status
-- **Status:** pending
-- **Tests:** —
-- **Observations:** none
+- **Status:** completed
+- **Tests:** 15 passing — media-probe.service.integration-spec.ts (4, real ffmpeg + MinIO), video-processing.service.spec.ts (6 unit), video-processing.service.integration-spec.ts (3, Postgres + MinIO + ffmpeg), worker.module.integration-spec.ts (1); video-worker container starts with docker compose up and logs 'Consuming videos.processing'
+- **Observations:** 
+  - worker.module.spec.ts from the plan became worker.module.integration-spec.ts: compiling WorkerModule opens the real Postgres connection (rootImports), which the project's test rules reserve for *.integration-spec.ts.
+  - Extracted the ConfigModule/TypeORM root setup of AppModule to src/config/root.imports.ts so the API and the worker validate the same env and connect the same way.
+  - The worker registers Channel and User next to Video: TypeORM autoLoadEntities fails to build Video's ManyToOne without them.
+  - start:worker:dev runs src/worker.ts through ts-node (transpile-only) with node --watch-path=src, so it does not share/delete the dist/ folder used by the API's nest start --watch.
+  - Fixture test/fixtures/sample.mp4 (35 KB, 2 s H.264 640x360 + AAC) generated with ffmpeg -f lavfi testsrc/sine.
 
 ### SI-03.8 — Detalhe, streaming e download do vídeo
 - **Status:** pending
