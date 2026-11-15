@@ -190,7 +190,7 @@ A fase foi conduzida com o Claude Code usando a fundação de IA do repositório
 | `research` | [`docs/decisions/technical-decisions-phase-03-videos.md`](docs/decisions/technical-decisions-phase-03-videos.md) — 12 TDs (fila RabbitMQ, upload multipart pré-assinado, storage, worker, FFmpeg, slug, streaming, ciclo de status, testes, cliente AMQP, retry) |
 | `plan-context` | [`docs/phases/phase-03-videos/context.md`](docs/phases/phase-03-videos/context.md) |
 | `plan-validate` ↔ `plan-resolve` | [`validation.md`](docs/phases/phase-03-videos/validation.md) — 4 execuções do validate (dirty → MD-1 fechado por um research complementar → AMB-3 → clean), 8 issues resolvidos e listados em `Resolved Issues`, **status clean**; [`library-refs.md`](docs/phases/phase-03-videos/library-refs.md) com a doc das libs via Context7 |
-| `plan-build` | [`phase-03-videos.md`](docs/phases/phase-03-videos/phase-03-videos.md) — SI-03.1…SI-03.9, Technical Specifications (Data Model, API Contracts, Authorization Matrix, Error Catalog, Events/Messages), Dependency Map, Deliverables |
+| `plan-build` | [`phase-03-videos.md`](docs/phases/phase-03-videos/phase-03-videos.md) — SI-03.1…SI-03.10 (SI-03.10: amendment do code review), Technical Specifications (Data Model, API Contracts, Authorization Matrix, Error Catalog, Events/Messages), Dependency Map, Deliverables |
 | `implement` | Código em `nestjs-project/` + [`progress.md`](docs/phases/phase-03-videos/progress.md) (status, testes e observações por SI) |
 | Revisão | `/code-review` (nível high) + auditoria independente dos critérios do DESAFIO; correções em `bugfix/phase-03-code-review` e no SI-03.10 do plano |
 
