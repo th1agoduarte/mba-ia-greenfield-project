@@ -3,9 +3,9 @@ kind: phase
 name: phase-03-videos
 test_specs_aware: true
 sources_mtime:
-  docs/phases/phase-03-videos/context.md: "2026-11-15T14:31:32-03:00"
-  docs/phases/phase-03-videos/library-refs.md: "2026-11-15T14:31:24-03:00"
-  docs/decisions/technical-decisions-phase-03-videos.md: "2026-11-15T14:31:12-03:00"
+  docs/phases/phase-03-videos/context.md: "2026-11-15T15:21:57-03:00"
+  docs/phases/phase-03-videos/library-refs.md: "2026-11-15T15:21:57-03:00"
+  docs/decisions/technical-decisions-phase-03-videos.md: "2026-11-15T15:19:38-03:00"
   docs/decisions/technical-decisions-openapi-docs-nestjs.md: "2026-11-15T12:38:57-03:00"
 ---
 
@@ -314,6 +314,46 @@ Entregar no `nestjs-project/` o serviço de armazenamento (MinIO/S3) para vídeo
 
 ---
 
+### SI-03.11 — Amendment: correções da revisão de segurança e de código pós-entrega
+
+**Description:** Registra as correções de uma revisão de segurança e de um code review independentes feitos depois da entrega (achados SR-1…SR-11), sem reescrever os SIs executados, para que o plano continue rastreável ao código.
+
+**Technical actions:**
+
+1. `completeUpload` repetível: em `processing`, republica `video.uploaded` (o worker ignora duplicatas) — recupera chamada que caiu entre gravar `processing` e publicar e mensagem estacionada na `.dead` com o vídeo ainda `processing` (SR-1, per `phase-03-videos/TD-09` Revision)
+2. `presignUploadPart(key, uploadId, partNumber, contentLength)` assina `content-length` com o tamanho exato da parte (`partSizeFor`: 64 MiB, a última com o resto do `file_size` declarado); o storage recusa corpo de outro tamanho (SR-2, per `phase-03-videos/TD-02` Revision)
+3. `@SkipThrottle()` sai do controller e fica só em `part-urls`, `upload/parts`, `GET /videos/{slug}`, `stream` e `download`; `POST /videos`, `complete` e `DELETE …/upload` voltam ao throttler global (SR-3, per `phase-03-videos/TD-02` Revision)
+4. Usuário sem canal → `ChannelNotFoundException` (`404 CHANNEL_NOT_FOUND`, `### Error Catalog`); falha do abort de compensação é logada sem perder o erro original (SR-4)
+5. `MediaProbeService`: `toProbeResult` rejeita imagem estática e ausência de duração positiva fora de Matroska/WebM (SR-5); `-format_whitelist`/`-protocol_whitelist` em ffprobe e ffmpeg contra HLS/DASH (SR-9); `redactUrls` remove URLs e query strings do texto de erro antes do `processing_error` (SR-8) (per `phase-03-videos/TD-06` Revision)
+6. Download com `filename*=UTF-8''…` (RFC 5987/6266) além do `filename=` ASCII (SR-6, per `phase-03-videos/TD-08` Revision)
+7. Consumer: entrega com `redelivered` conta como tentativa — vai para a retry com `x-attempt + 1` ou para a `.dead` sem rodar o handler (SR-7, per `phase-03-videos/TD-12` Revision)
+8. `compose.yaml`: console do MinIO e management do RabbitMQ em `127.0.0.1`; credenciais root do MinIO na API e expiração de uploads incompletos (padrão do MinIO, 24 h) documentadas (SR-10, SR-11, per `phase-03-videos/TD-03` Revision)
+
+**Tests:**
+
+| Artifact | Layer | Test file |
+|----------|-------|-----------|
+| `VideosService` | Unit: republica em `processing`, `CHANNEL_NOT_FOUND`, erro original preservado quando o abort falha, `partSizeFor` e tamanho passado ao presign | `src/videos/videos.service.spec.ts` |
+| `VideosService` | Integration (Postgres + MinIO + RabbitMQ): segundo `complete` em `processing` publica de novo | `src/videos/videos.service.integration-spec.ts` |
+| `StorageService` | Integration (MinIO real): `PUT` maior/menor que o assinado → `403 SignatureDoesNotMatch`; `filename*` com nome não-ASCII e CR/LF | `src/storage/storage.service.integration-spec.ts` |
+| `toProbeResult`, `redactUrls` | Unit: imagens (png_pipe, image2, gif…), sem duração, WebM sem duração aceito, redação de URLs | `src/media/media-probe.service.spec.ts` |
+| `MediaProbeService` | Integration (ffmpeg + MinIO): PNG/JPEG/GIF recusados; manifesto HLS e DASH recusados (`not on whitelist`); `file://` recusado; erro de objeto inexistente sem host/assinatura | `src/media/media-probe.service.integration-spec.ts` |
+| `VideoProcessingService` | Integration: PNG enviado como vídeo termina `failed`, nunca `ready` | `src/videos/video-processing.service.integration-spec.ts` |
+| `VideoProcessingConsumer` | Unit: reentrega → retry com `x-attempt + 1` / dead quando esgotada / laço do nack limitado; Integration (RabbitMQ real): entrega perdida por "crash" volta como tentativa 2 | `src/messaging/video-processing.consumer.spec.ts`, `src/messaging/video-processing.integration-spec.ts` |
+| `VideosController` | E2E: `404 CHANNEL_NOT_FOUND`; 11º `POST /videos` no minuto → `429`; polling/part-urls/parts sem `429` | `test/videos.e2e-spec.ts` |
+
+**Dependencies:** SI-03.10 — amendment anterior
+
+**Acceptance criteria:**
+
+- Um `complete` repetido em `processing` publica `video.uploaded` de novo e responde `202`; dois `complete` concorrentes sobre um `draft` continuam publicando uma vez
+- Um `PUT` de parte com tamanho diferente do assinado recebe `403` do storage e a parte não é gravada
+- O 11º `POST /videos` no mesmo minuto recebe `429`; status, URLs de partes e lista de partes não são limitados
+- Um manifesto HLS/DASH ou uma imagem PNG terminam `failed` sem requisição às URLs internas do manifesto; um MP4 válido continua `ready`
+- `processing_error` não contém host do storage, access key id nem assinatura
+
+---
+
 ## Technical Specifications
 
 ### Data Model
@@ -369,7 +409,7 @@ No public bucket policy. Presigned URLs are signed against `S3_PUBLIC_ENDPOINT`;
 
 ### API Contracts
 
-All routes live in `VideosController` (`@ApiTags('videos')`, `@ApiBearerAuth('access-token')`, `@SkipThrottle()` per `phase-03-videos/TD-02` and `TD-08` Revisions). All require `Authorization: Bearer <access_token>` (global `JwtAuthGuard`). `{slug}` is the unique video identifier (per `phase-03-videos/TD-07`). Errors use the inherited envelope `{ statusCode, error, message }` (per `phase-02-auth/TD-07`).
+All routes live in `VideosController` (`@ApiTags('videos')`, `@ApiBearerAuth('access-token')`). The global throttler (10 req/60 s, `429`) applies to `POST /videos`, `complete` and `DELETE …/upload`; `@SkipThrottle()` is set only on part-urls, upload/parts, `GET /videos/{slug}`, stream and download (per `phase-03-videos/TD-02` and `TD-08` Revisions; narrowed in SI-03.11). All require `Authorization: Bearer <access_token>` (global `JwtAuthGuard`). `{slug}` is the unique video identifier (per `phase-03-videos/TD-07`). Errors use the inherited envelope `{ statusCode, error, message }` (per `phase-02-auth/TD-07`).
 
 #### POST /videos (SI-03.5)
 
@@ -394,6 +434,8 @@ Initiates the upload: creates the `draft` video and the S3 multipart upload (per
 **Error responses:**
 - 400 VALIDATION_ERROR: body fails validation (including `file_size` above 10 GiB)
 - 401: missing/invalid access token
+- 404 CHANNEL_NOT_FOUND: the authenticated user has no channel _(SI-03.11)_
+- 429: global throttler (10 requests/60 s) _(SI-03.11)_
 
 ---
 
@@ -405,7 +447,7 @@ Returns presigned `UploadPart` URLs for the requested part numbers (per `phase-0
 - part_numbers: integer[], required — 1..100 items, each 1..`part_count`, unique
 
 **Response 200:**
-- urls: `[{ part_number: number, url: string }]` — PUT the part bytes to `url`; keep the `ETag` response header
+- urls: `[{ part_number: number, url: string }]` — PUT the part bytes to `url`; keep the `ETag` response header. Each URL is signed for the exact part size (`content-length`: 64 MiB, the last part = `file_size − (part_count − 1) × 64 MiB`); the storage answers `403` to a body of any other size _(SI-03.11)_
 - expires_in: number — `3600` seconds
 
 **Error responses:**
@@ -443,7 +485,7 @@ Aborts the multipart upload and removes the `draft` video.
 
 #### POST /videos/{slug}/upload/complete (SI-03.6)
 
-Completes the multipart upload, moves the video to `processing` and publishes `video.uploaded` (per `phase-03-videos/TD-02`, `TD-09`, `TD-12`). Idempotent: calling it again while `processing` returns 202 without publishing again.
+Completes the multipart upload, moves the video to `processing` and publishes `video.uploaded` (per `phase-03-videos/TD-02`, `TD-09`, `TD-12`). Repeatable: calling it again while `processing` returns 202 and republishes `video.uploaded` (the worker ignores duplicates); concurrent calls on a `draft` publish once _(SI-03.11; it was a no-op before)_.
 
 **Request body:**
 - parts: `[{ part_number: integer ≥ 1, etag: string }]`, required — 1..10000 items
@@ -458,6 +500,7 @@ Completes the multipart upload, moves the video to `processing` and publishes `v
 - 400 UPLOAD_TOO_LARGE: the assembled file exceeds 10 GiB (video set to `failed`, object deleted)
 - 404 VIDEO_NOT_FOUND
 - 409 VIDEO_INVALID_STATE: video is `ready` or `failed`
+- 429: global throttler (10 requests/60 s) _(SI-03.11)_
 
 ---
 
@@ -489,7 +532,7 @@ Completes the multipart upload, moves the video to `processing` and publishes `v
 
 #### GET /videos/{slug}/download (SI-03.8)
 
-**Response 302:** `Location` = presigned GET with `response-content-disposition=attachment; filename="<original_file_name>"` (1 h, per `phase-03-videos/TD-08`).
+**Response 302:** `Location` = presigned GET with `response-content-disposition=attachment; filename="<ASCII-safe original_file_name>"; filename*=UTF-8''<percent-encoded original_file_name>` (1 h, per `phase-03-videos/TD-08`; `filename*` added in SI-03.11).
 
 **Error responses:**
 - 404 VIDEO_NOT_FOUND
@@ -521,9 +564,10 @@ Inherited envelope and `VALIDATION_ERROR` from phase 02. New domain exceptions i
 | VIDEO_NOT_READY | 409 | `stream`/`download` on a video whose status is not `ready` |
 | INVALID_PART_NUMBER | 400 | Requested part number greater than the video's `part_count` |
 | INVALID_UPLOAD_PARTS | 400 | `CompleteMultipartUpload` rejected (`InvalidPart`, `InvalidPartOrder`, `EntityTooSmall`) |
+| CHANNEL_NOT_FOUND | 404 | `POST /videos` by an authenticated user who has no channel (e.g. a still-valid JWT of a removed user) _(added in SI-03.11; it was a 500)_ |
 | UPLOAD_TOO_LARGE | 400 | The assembled object exceeds 10 GiB (part sizes are chosen by the client); the video becomes `failed` and the object is deleted _(added by the code review after SI-03.9)_ |
 
-Worker-side failures are not HTTP errors: they set `status = failed` and `processing_error` (per `phase-03-videos/TD-09`).
+Worker-side failures are not HTTP errors: they set `status = failed` and `processing_error` (per `phase-03-videos/TD-09`); URLs and query strings are stripped from that text (SI-03.11).
 
 ### Events/Messages
 
@@ -538,7 +582,7 @@ Worker-side failures are not HTTP errors: they set `status = failed` and `proces
 **Headers:** `x-attempt: 1..3` (per `phase-03-videos/TD-12`)
 **Producer:** `VideoProcessingPublisher` in the API, from `VideosService.completeUpload` (per `phase-03-videos/TD-09`, `TD-11`)
 **Consumer:** `VideoProcessingConsumer` in the `video-worker` process (per `phase-03-videos/TD-05`, `TD-11`)
-**Trigger:** `POST /videos/{slug}/upload/complete` after `CompleteMultipartUpload` succeeds and the video is set to `processing`.
+**Trigger:** `POST /videos/{slug}/upload/complete` after `CompleteMultipartUpload` succeeds and the video is set to `processing`, and again on each repeated call while the video is `processing` (SI-03.11).
 **Delivery semantics:** at-least-once — persistent message, publisher confirms, `prefetch(1)`, ack after the DB write; the consumer ignores videos not in `processing` (per `phase-03-videos/TD-12`, `TD-09` Revision).
 
 **Topology** (names derived from `RABBITMQ_NAMESPACE`, default `videos`; tests use their own namespace per `phase-03-videos/TD-10` Revision):
@@ -550,7 +594,7 @@ Worker-side failures are not HTTP errors: they set `status = failed` and `proces
 | Queue | `{ns}.processing.retry` | durable; `x-message-ttl` = `VIDEO_PROCESSING_RETRY_DELAY_MS` (5000); `x-dead-letter-exchange` = `{ns}`, `x-dead-letter-routing-key` = `video.uploaded` |
 | Queue | `{ns}.processing.dead` | durable; parking queue for messages that exhausted the attempts |
 
-**Retry policy** (per `phase-03-videos/TD-12`, `TD-09`): retryable error and `x-attempt < VIDEO_PROCESSING_MAX_ATTEMPTS` (3) → publish copy to `{ns}.processing.retry` with `x-attempt + 1`, ack original. Non-retryable error (no video stream, object missing) or last attempt → set `failed` + `processing_error`, publish copy to `{ns}.processing.dead`, ack.
+**Retry policy** (per `phase-03-videos/TD-12`, `TD-09`): retryable error and `x-attempt < VIDEO_PROCESSING_MAX_ATTEMPTS` (3) → publish copy to `{ns}.processing.retry` with `x-attempt + 1`, ack original. Non-retryable error (no video stream, still image, no positive duration, demuxer/protocol not on the whitelist, object missing) or last attempt → set `failed` + `processing_error`, publish copy to `{ns}.processing.dead`, ack. A redelivered message (`redelivered = true`) counts as a used attempt: copy to the retry queue with `x-attempt + 1` (or to the dead queue when exhausted) without running the handler _(SI-03.11)_.
 
 ---
 
@@ -567,6 +611,7 @@ SI-03.1 (root) — infra, config, deps
                 └── SI-03.8 — depends on SI-03.7 (vídeos ready para stream/download)
                     └── SI-03.9 — depends on SI-03.8 (todas as rotas para OpenAPI/docs/smoke)
                         └── SI-03.10 — depends on SI-03.9 (amendment pós-review)
+                            └── SI-03.11 — depends on SI-03.10 (amendment da revisão de segurança)
 ```
 
 ---
@@ -583,6 +628,7 @@ SI-03.1 (root) — infra, config, deps
 - [ ] SI-03.8 — Detalhe, streaming e download do vídeo
 - [ ] SI-03.9 — Contrato OpenAPI, documentação de IA e smoke do container worker
 - [ ] SI-03.10 — Amendment: correções do code review e alinhamento plano ↔ código
+- [ ] SI-03.11 — Amendment: correções da revisão de segurança e de código pós-entrega
 
 **Full test suites:**
 

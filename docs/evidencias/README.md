@@ -1,13 +1,13 @@
 # Evidências — Fase 03 (Upload e Processamento de Vídeos)
 
-Execuções feitas em 2026-11-15 contra a stack do `nestjs-project/compose.yaml` (Docker 29, Compose v5). DoD e smoke de amostra refeitos após as correções do code review (`bugfix/phase-03-code-review`); o upload de ~10 GiB foi executado antes delas. O roteiro de verificação está em [`VALIDACAO.md`](../../VALIDACAO.md).
+Execuções feitas em 2026-11-15 contra a stack do `nestjs-project/compose.yaml` (Docker 29, Compose v5). A DoD foi refeita após as correções da revisão de segurança (`bugfix/phase-03-security-review`, SI-03.11). O smoke de amostra é das correções do code review (`bugfix/phase-03-code-review`) e o upload de ~10 GiB é anterior a ambas: **nenhum dos dois smokes foi refeito depois do SI-03.11** (o fluxo completo segue coberto pelo e2e `videos-flow.e2e-spec.ts`, que roda nesta DoD). O roteiro de verificação está em [`VALIDACAO.md`](../../VALIDACAO.md).
 
 ## Definition of Done
 
 | Verificação | Comando (dentro de `nestjs-project/`) | Resultado | Log |
 |-------------|----------------------------------------|-----------|-----|
-| Unit + integração | `docker compose exec nestjs-api npm test` (o script já roda em band) | **36 suítes, 221 testes passando** | [dod-npm-test.log](dod-npm-test.log) |
-| E2E | `docker compose exec nestjs-api npm run test:e2e` | **5 suítes, 71 testes passando** (rodado 2× seguidas) | [dod-test-e2e.log](dod-test-e2e.log) |
+| Unit + integração | `docker compose exec nestjs-api npm test` (o script já roda em band) | **37 suítes, 249 testes passando** | [dod-npm-test.log](dod-npm-test.log) |
+| E2E | `docker compose exec nestjs-api npm run test:e2e` | **5 suítes, 74 testes passando** | [dod-test-e2e.log](dod-test-e2e.log) |
 | Type-check | `docker compose exec nestjs-api npx tsc --noEmit` | código de saída **0** | [dod-tsc.log](dod-tsc.log) |
 | Lint | `docker compose exec nestjs-api npx eslint "{src,apps,libs,test}/**/*.ts"` (sem `--fix`, para não alterar arquivos) | código de saída **0**, sem erros | [dod-lint.log](dod-lint.log) |
 | Checagem negativa | limite trocado para 5 GiB → `test/videos.e2e-spec.ts -t "10 GiB"` | falha como esperado (`expected 201 "Created", got 400`) e o arquivo foi restaurado | [negative-check.log](negative-check.log) |

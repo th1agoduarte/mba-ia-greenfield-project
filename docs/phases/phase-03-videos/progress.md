@@ -1,7 +1,7 @@
 # phase-03-videos — Progress
 
 **Status:** completed
-**SIs:** 10/10 completed
+**SIs:** 11/11 completed
 
 ### SI-03.1 — Infraestrutura: storage, broker, FFmpeg e configuração
 - **Status:** completed
@@ -93,3 +93,20 @@
   - Independent audit of the DESAFIO criteria: plain `npm test` failed in parallel (shared DB) → `test` script now runs `--runInBand`; TD-01 got the user's decision rationale; plan synced through this amendment SI (deviations of executed SIs listed in the plan, SIs themselves not rewritten); README/VALIDACAO/CLAUDE.md wording fixed (modules list, `npm test` description, `S3_PUBLIC_ENDPOINT` localhost exception, ESLint test override, Git Flow check).
   - Known limitation: if the database is down during all 3 attempts, the message is parked in `videos.processing.dead` without marking the video `failed`; recovery is a manual requeue from the dead queue (a reconciliation job is out of this phase's scope).
 
+### SI-03.11 — Amendment: correções da revisão de segurança e de código pós-entrega
+- **Status:** completed
+- **Tests:** full DoD after the merge — `npm test` 37 suites / 249 tests, `npm run test:e2e` 5 suites / 74 tests, `tsc` 0, lint 0 (`docs/evidencias/`)
+- **Observations:**
+  - An independent code review and security review after delivery reported 11 code/infra findings (SR-1…SR-11, below) plus 3 documentation findings; all fixed on `bugfix/phase-03-security-review` (one commit per finding) and `docs/phase-03-review-docs`, with tests (negative ones for the security fixes).
+  - SR-1 (video stuck in `processing`): `complete` while `processing` now republishes `video.uploaded`; duplicates are harmless because `VideoProcessingService.handle` returns `ok` for any video not in `processing` and every write is conditional on `status = processing`. The same call recovers the worker-side case where `findOneBy`/`markFailed` throw on the last attempt with the database down (message parked in `.dead`, video still `processing`) — a reconciliation job would need new infrastructure, so this case is documented and recovered through `complete` instead (supersedes the SI-03.10 "manual requeue" note).
+  - SR-2 (part size): part URLs sign `content-length` (`signableHeaders`); checked against MinIO first with a throwaway script (signed headers `content-length;host`, 101/99-byte PUT on a 100-byte URL → 403 `SignatureDoesNotMatch`). E2E fixtures now declare the real file size (a 1 KiB PUT on a 150 MiB draft no longer fits part 1).
+  - SR-3 (throttle): `@SkipThrottle()` moved from the controller to part-urls, upload/parts, details, stream and download; the e2e clears the throttler storage per test (as `auth.e2e-spec.ts` does) and asserts the 11th `POST /videos` gets `429`.
+  - SR-4: `CHANNEL_NOT_FOUND` (404) added to the Error Catalog; a failing compensating abort is logged and the original error kept.
+  - SR-5 (still image): ffprobe 5.1 reports `png_pipe` (no duration) and `image2` (0.04 s) with a `video` stream. Rejected as non-retryable; "no positive duration" is also rejected except for Matroska/WebM, because SI-03.10 deliberately accepts browser-recorded WebM without duration (existing test kept).
+  - SR-6: `filename*=UTF-8''…` added next to the ASCII `filename=`; tested with a non-ASCII name containing CR/LF through the real MinIO.
+  - SR-7 (redelivery loop): a `redelivered` message counts as an attempt and is routed through the retry/dead queue without running the handler; integration test takes a message with a raw channel, closes it without ack and sees the consumer receive it as attempt 2. `x-death`/`x-delivery-count` were not usable on classic queues.
+  - SR-8: the stored error contained the full presigned URL (internal host, access key id, signature) — reproduced in a test before the fix; now URLs/query strings are stripped (`redactUrls`).
+  - SR-9 (SSRF via HLS/DASH): reproduced before the fix (ffprobe followed a manifest to `http://db:5432/segment.ts`); `-format_whitelist`/`-protocol_whitelist` syntax checked with `ffprobe -h full` on the worker image (FFmpeg 5.1.9). The negative check (whitelist removed) makes the new tests fail.
+  - SR-10: MinIO console and RabbitMQ management bound to `127.0.0.1` in `compose.yaml` (validated with `docker compose config -q`; running containers keep the old binding until the next `up`). The API using the MinIO root credentials is documented as a dev-environment risk (fixing it requires recreating the stack).
+  - SR-11: the running MinIO (`RELEASE.2026-08-04`) already expires incomplete multipart uploads (`stale_uploads_expiry=24h`, cleanup every 6 h; `mc admin config get … api`), so no `minio-init` rule was added.
+  - `openapi.json` regenerated (POST /videos 404, part-urls exact size, repeatable complete); `nestjs-project/CLAUDE.md` and root `CLAUDE.md` aligned. The 10 GiB smoke in `docs/evidencias/` predates these fixes and was not re-run.

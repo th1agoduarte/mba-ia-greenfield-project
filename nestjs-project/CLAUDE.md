@@ -37,9 +37,9 @@ Services:
 - `nestjs-api` — NestJS API, port `3000`
 - `db` — PostgreSQL 17, port `5432`, database `streamtube`, user/password `streamtube`
 - `mailpit` — SMTP `1025`, UI/API `8025`
-- `minio` — S3-compatible object storage (`pgsty/minio`), API `${MINIO_API_PORT:-9000}`, console `${MINIO_CONSOLE_PORT:-9001}`
+- `minio` — S3-compatible object storage (`pgsty/minio`), API `${MINIO_API_PORT:-9000}`, console `127.0.0.1:${MINIO_CONSOLE_PORT:-9001}` (host loopback only); incomplete multipart uploads expire after 24 h (MinIO default `stale_uploads_expiry`)
 - `minio-init` — one-shot: creates the private bucket `S3_BUCKET` (`mc mb --ignore-existing`) and exits
-- `rabbitmq` — RabbitMQ 4.2 (video processing queue), AMQP `5672`, management UI `15672`
+- `rabbitmq` — RabbitMQ 4.2 (video processing queue), AMQP `5672`, management UI `127.0.0.1:15672` (host loopback only)
 - `video-worker` — same image/source as the API; runs `npm run start:worker:dev` (`src/worker.ts`, FFmpeg) and restarts on changes in `src/`
 
 The image (`Dockerfile.dev`) includes `ffmpeg`/`ffprobe`, used by the worker and by the tests that run in `nestjs-api`.
@@ -182,26 +182,26 @@ Decisions: `docs/decisions/technical-decisions-phase-03-videos.md`. Plan/progres
 |------|----------------|
 | `src/videos/entities/video.entity.ts` | `videos` table (`VideoStatus`: `draft` → `processing` → `ready` \| `failed`), owned by a channel (`channel_id`, cascade) |
 | `src/videos/videos.service.ts` | Upload lifecycle (draft + multipart, part URLs, list/abort, complete → publish), owner-only reads, stream/download URLs |
-| `src/videos/videos.controller.ts` | HTTP routes below (`@SkipThrottle()`, owner-only; non-owners get `404 VIDEO_NOT_FOUND`) |
+| `src/videos/videos.controller.ts` | HTTP routes below (owner-only; non-owners get `404 VIDEO_NOT_FOUND`). Global throttler (10 req/60 s) on `POST /videos`, `complete` and `DELETE`; `@SkipThrottle()` only on part URLs, parts list, details (polling), stream and download |
 | `src/videos/video-processing.service.ts` | Worker logic: ffprobe metadata, thumbnail, `ready`/`failed`; ignores videos not in `processing` (idempotent) |
 | `src/videos/video-processing.module.ts`, `src/videos/video-worker.ts` | Worker feature: starts the queue consumer on bootstrap |
 | `src/worker.module.ts`, `src/worker.ts` | Worker process root (no HTTP); `src/config/root.imports.ts` holds the config/DB root shared with `AppModule` |
 | `src/storage/` | `StorageService` (AWS SDK v3): multipart, presigned PUT/GET (public endpoint), `putObject`, `headObject` |
-| `src/messaging/` | RabbitMQ via `amqp-connection-manager`: topology, `VideoProcessingPublisher` (confirms), `VideoProcessingConsumer` (prefetch 1, retry queue with TTL + `x-attempt`, parking queue) |
-| `src/media/media-probe.service.ts` | Spawns `ffprobe`/`ffmpeg` on a presigned URL; `NonRetryableProcessingError` for inputs that will never work |
+| `src/messaging/` | RabbitMQ via `amqp-connection-manager`: topology, `VideoProcessingPublisher` (confirms), `VideoProcessingConsumer` (prefetch 1, retry queue with TTL + `x-attempt`, parking queue; a redelivered message counts as a used attempt) |
+| `src/media/media-probe.service.ts` | Spawns `ffprobe`/`ffmpeg` on a presigned URL with `-format_whitelist` (common video containers; no HLS/DASH/images) and `-protocol_whitelist` (`http,https,tcp,tls`); `NonRetryableProcessingError` for inputs that will never work (incl. still images, no positive duration outside Matroska/WebM); URLs are stripped from error text (`redactUrls`) |
 
 Endpoints (all `Authorization: Bearer`, contract in `openapi.json`):
 
 | Method & route | Result |
 |----------------|--------|
-| `POST /videos` | `201` draft + `upload { part_size: 67108864, part_count, max_urls_per_request: 100 }`; `file_size` ≤ 10737418240 |
-| `POST /videos/{slug}/upload/part-urls` | `200` presigned `PUT` URLs (1 h) for ≤ 100 parts |
+| `POST /videos` | `201` draft + `upload { part_size: 67108864, part_count, max_urls_per_request: 100 }`; `file_size` ≤ 10737418240; `404 CHANNEL_NOT_FOUND` if the user has no channel |
+| `POST /videos/{slug}/upload/part-urls` | `200` presigned `PUT` URLs (1 h) for ≤ 100 parts, each signed for the exact part size (`Content-Length`: 64 MiB, last part = remainder of `file_size`) |
 | `GET /videos/{slug}/upload/parts` | `200` parts already stored (resume) |
-| `POST /videos/{slug}/upload/complete` | `202` `processing` + `video.uploaded` published (idempotent; compensates to `draft` if publishing fails); `400 UPLOAD_TOO_LARGE` (video `failed`, object deleted) if the assembled file exceeds 10 GiB |
+| `POST /videos/{slug}/upload/complete` | `202` `processing` + `video.uploaded` published (repeatable: while `processing` it republishes, the worker ignores duplicates; compensates to `draft` if publishing fails); `400 UPLOAD_TOO_LARGE` (video `failed`, object deleted) if the assembled file exceeds 10 GiB |
 | `DELETE /videos/{slug}/upload` | `204` multipart aborted, draft removed |
 | `GET /videos/{slug}` | `200` status, duration, metadata, presigned `thumbnail_url` |
 | `GET /videos/{slug}/stream` | `302` to presigned GET (storage answers `Range` with `206`); `409 VIDEO_NOT_READY` unless `ready` |
-| `GET /videos/{slug}/download` | `302` to presigned GET with `Content-Disposition: attachment` |
+| `GET /videos/{slug}/download` | `302` to presigned GET with `Content-Disposition: attachment; filename="<ASCII>"; filename*=UTF-8''<name>` |
 
 Storage keys: `videos/{id}/original`, `videos/{id}/thumbnail.jpg` in the private bucket `S3_BUCKET`.
 

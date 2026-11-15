@@ -147,10 +147,15 @@ describe('VideosService (integration — Postgres + MinIO)', () => {
       { body: { video_id: id }, headers: { 'x-attempt': 1 } },
     ]);
 
+    // Repeating the call while processing republishes (recovers a call that
+    // died between the status commit and the publish).
     await service.completeUpload(userId, slug, [{ part_number: 1, etag }]);
-    expect(
-      await drainQueue(videoProcessingTopology(namespace).queue),
-    ).toHaveLength(0);
+    expect(await drainQueue(videoProcessingTopology(namespace).queue)).toEqual([
+      { body: { video_id: id }, headers: { 'x-attempt': 1 } },
+    ]);
+    expect((await videoRepository.findOneByOrFail({ id })).status).toBe(
+      VideoStatus.PROCESSING,
+    );
   });
 
   it('keeps the video in draft when publishing fails, and a retry succeeds', async () => {

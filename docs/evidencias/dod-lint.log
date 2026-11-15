@@ -1,1 +1,2 @@
+$ npx eslint "{src,apps,libs,test}/**/*.ts"  (npm run lint sem --fix, para não alterar arquivos)
 lint (sem --fix) exit code: 0

@@ -3,6 +3,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { QueryFailedError } from 'typeorm';
 import { ChannelsService } from '../channels/channels.service';
 import {
+  ChannelNotFoundException,
   InvalidPartNumberException,
   UploadTooLargeException,
   VideoInvalidStateException,
@@ -15,6 +16,7 @@ import { Video, VideoStatus } from './entities/video.entity';
 import {
   OVERSIZED_UPLOAD_ERROR,
   partCountFor,
+  partSizeFor,
   VideosService,
 } from './videos.service';
 
@@ -76,6 +78,19 @@ describe('VideosService', () => {
     });
   });
 
+  describe('partSizeFor', () => {
+    it('gives 64 MiB to every part but the last, which carries the remainder', () => {
+      const size = 150 * 1024 ** 2; // 3 parts: 64 + 64 + 22 MiB
+      expect([1, 2, 3].map((n) => partSizeFor(size, n))).toEqual([
+        64 * 1024 ** 2,
+        64 * 1024 ** 2,
+        22 * 1024 ** 2,
+      ]);
+      expect(partSizeFor(10 * 1024 ** 3, 160)).toBe(64 * 1024 ** 2);
+      expect(partSizeFor(1, 1)).toBe(1);
+    });
+  });
+
   describe('initiateUpload', () => {
     const dto = {
       title: 't',
@@ -117,6 +132,31 @@ describe('VideosService', () => {
         'upload-1',
       );
     });
+
+    it('keeps the original error when the compensating abort also fails', async () => {
+      videoRepository.save.mockRejectedValue(new Error('db down'));
+      storageService.abortMultipartUpload.mockRejectedValueOnce(
+        new Error('storage down'),
+      );
+
+      await expect(service.initiateUpload('user-1', dto)).rejects.toThrow(
+        'db down',
+      );
+      expect(storageService.abortMultipartUpload).toHaveBeenCalled();
+    });
+
+    it('throws CHANNEL_NOT_FOUND (404) when the user has no channel', async () => {
+      channelsService.findByUserId.mockResolvedValue(null);
+
+      const err = await service.initiateUpload('user-1', dto).catch((e) => e);
+
+      expect(err).toBeInstanceOf(ChannelNotFoundException);
+      expect(err).toMatchObject({
+        errorCode: 'CHANNEL_NOT_FOUND',
+        httpStatus: 404,
+      });
+      expect(storageService.createMultipartUpload).not.toHaveBeenCalled();
+    });
   });
 
   describe('presignParts', () => {
@@ -144,13 +184,18 @@ describe('VideosService', () => {
       expect(storageService.presignUploadPart).not.toHaveBeenCalled();
     });
 
-    it('signs one URL per requested part', async () => {
+    it('signs one URL per requested part, for the exact part size', async () => {
       videoRepository.findOne.mockResolvedValue(draft());
       storageService.presignUploadPart.mockImplementation(
         (_k: string, _u: string, n: number) => Promise.resolve(`url-${n}`),
       );
 
       const result = await service.presignParts('user-1', 'slug', [1, 3]);
+
+      expect(storageService.presignUploadPart.mock.calls).toEqual([
+        ['videos/video-id/original', 'upload-1', 1, 64 * 1024 ** 2],
+        ['videos/video-id/original', 'upload-1', 3, 22 * 1024 ** 2],
+      ]);
 
       expect(result).toEqual({
         urls: [
@@ -234,7 +279,8 @@ describe('VideosService.completeUpload', () => {
     ]);
   });
 
-  it('is idempotent while processing: returns without publishing again', async () => {
+  it('is repeatable while processing: republishes the job without touching the storage or the status', async () => {
+    // e.g. a previous call committed `processing` and died before publishing
     videoRepository.findOne.mockResolvedValue(
       draft({ status: VideoStatus.PROCESSING, upload_id: null }),
     );
@@ -243,7 +289,8 @@ describe('VideosService.completeUpload', () => {
 
     expect(result.status).toBe(VideoStatus.PROCESSING);
     expect(storageService.completeMultipartUpload).not.toHaveBeenCalled();
-    expect(publisher.publishVideoUploaded).not.toHaveBeenCalled();
+    expect(videoRepository.update).not.toHaveBeenCalled();
+    expect(publisher.publishVideoUploaded).toHaveBeenCalledWith('video-id');
   });
 
   it.each([VideoStatus.READY, VideoStatus.FAILED])(

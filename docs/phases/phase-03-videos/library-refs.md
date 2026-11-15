@@ -17,7 +17,7 @@ libs:
     context7_id: "— (not indexed by Context7; README from the npm registry)"
     fetched_at: "2026-11-15T13:30:00-03:00"
 sources_mtime:
-  docs/decisions/technical-decisions-phase-03-videos.md: "2026-11-15T14:31:12-03:00"
+  docs/decisions/technical-decisions-phase-03-videos.md: "2026-11-15T15:19:38-03:00"
 ---
 
 # phase-03-videos — Library References
@@ -142,3 +142,43 @@ await channel.close(); await connection.close();
 | Bucket bootstrap (TD-03) | `pgsty/mc:RELEASE.2026-10-26T00-00-00Z` | MinIO client for the one-shot `mc mb --ignore-existing` service. |
 | Message broker (TD-01) | `rabbitmq:4.2.9-management-alpine` | Official image, RabbitMQ 4.2 line with the management UI. |
 | FFmpeg (TD-06) | Debian `ffmpeg` package installed in `Dockerfile.dev` (`node:25.6.0-slim`) | Provides `ffprobe` and `ffmpeg` binaries for the worker and for the tests in the same image (TD-05, TD-10). |
+
+## Lookups of the post-delivery review (SI-03.11)
+
+Pulled on 2026-11-15 through the Context7 public HTTP API (`/api/v1/<id>?topic=…`), cross-checked against the installed versions; where Context7 had nothing, the installed binary/server was queried instead (discrepancy flagged per CLAUDE.md "Library Documentation Lookup").
+
+### @aws-sdk/s3-request-presigner — signing `content-length` (SR-2)
+
+**Source:** `/aws/aws-sdk-js-v3` (README of `s3-request-presigner`: "Enforce non-x-amz-* headers using signableHeaders"); installed `3.1169.0`.
+
+```ts
+const url = await getSignedUrl(publicS3, new UploadPartCommand({
+  Bucket, Key, UploadId, PartNumber, ContentLength: partSize,   // becomes the content-length header
+}), { expiresIn: 3600, signableHeaders: new Set(['content-length']) });
+// X-Amz-SignedHeaders=content-length;host → MinIO answers 403 SignatureDoesNotMatch
+// to a PUT whose body is not exactly partSize bytes (checked against the running MinIO).
+```
+
+### amqplib — `fields.redelivered` (SR-7)
+
+**Source:** `/amqp-node/amqplib` (consume example logs `msg.fields.redelivered`); `ConsumeMessage.fields.redelivered: boolean` in the installed 2.x typings. RabbitMQ sets it when a message was delivered before and not settled (consumer/channel/connection lost, or `nack` with requeue). Classic queues carry no delivery counter: `x-death` is only added on dead-lettering and `x-delivery-count` only on quorum queues.
+
+### @nestjs/throttler — method-level `@SkipThrottle()` (SR-3)
+
+**Source:** `/nestjs/throttler` — `SkipThrottle` is a `MethodDecorator & ClassDecorator`; `@SkipThrottle()` alone skips the `default` throttler. Applied per route instead of on the controller. Installed `^6.5.0` (phase-02-auth/TD-08).
+
+### FFmpeg CLI — `-format_whitelist` / `-protocol_whitelist` (SR-9)
+
+**Source:** `/websites/ffmpeg_documentation` and `/websites/ffmpeg_ffmpeg-all` only returned `protocol_whitelist` through the `movie` filter's `format_opts`; the options were confirmed on the worker image itself (FFmpeg **5.1.9**, Debian 12): `ffprobe -h full` lists `-format_whitelist` ("List of demuxers that are allowed to be used") and `-protocol_whitelist` as input (`.D`) options, and `ffprobe -demuxers` gives the demuxer names (`mov,mp4,m4a,3gp,3g2,mj2`, `matroska,webm`, `avi`, `flv`, `mpegts`, `mpeg`, `ogg`, `asf`; `hls`, `dash`, `concat`, `image2`, `png_pipe`, `gif` are left out).
+
+```bash
+ffprobe -v error -format_whitelist mov,mp4,m4a,3gp,3g2,mj2,matroska,webm,avi,flv,mpegts,mpeg,ogg,asf \
+  -protocol_whitelist http,https,tcp,tls -print_format json -show_format -show_streams "$PRESIGNED_URL"
+# HLS/DASH manifest → "[hls @ …] Format not on whitelist '…'"; file:// → "Protocol 'file' not on whitelist"
+```
+
+Options go **before** the input (before `-i` for ffmpeg). Without them, ffprobe opened an uploaded HLS playlist and requested its segment URL.
+
+### MinIO — expiry of incomplete multipart uploads (SR-11)
+
+**Source:** not found in `/minio/docs` or `/minio/minio` on Context7; read from the running server (`pgsty/minio:RELEASE.2026-08-04T00-00-00Z`) with the bundled client: `MC_HOST_l=http://<root>:<pass>@localhost:9000 mc admin config get l api` → `stale_uploads_expiry=24h`, `stale_uploads_cleanup_interval=6h` (defaults; the stack sets no `MINIO_API_*` override). No lifecycle rule is needed in `minio-init`.

@@ -2,64 +2,73 @@
 > nestjs-project@0.0.1 test
 > jest --runInBand
 
-(node:48267) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+(node:61932) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
 (Use `node --trace-deprecation ...` to show where the warning was created)
-(node:48267) Warning: `--localstorage-file` was provided without a valid path
-PASS src/auth/auth.service.integration-spec.ts (8.157 s)
-(node:48267) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
-PASS src/channels/entities/channel.entity.integration-spec.ts
-(node:48267) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
-PASS src/users/users.service.integration-spec.ts
-(node:48267) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
-PASS src/auth/entities/refresh-token.entity.integration-spec.ts
-(node:48267) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
-PASS src/channels/channels.service.integration-spec.ts
-(node:48267) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
-PASS src/auth/auth.module.spec.ts
-PASS src/auth/auth.service.spec.ts
-PASS src/openapi-export.integration-spec.ts
-PASS src/mail/mail.service.integration-spec.ts
+(node:61932) Warning: `--localstorage-file` was provided without a valid path
+PASS src/auth/auth.service.integration-spec.ts (6.404 s)
 PASS src/messaging/video-processing.integration-spec.ts
-PASS src/videos/videos.service.spec.ts
-(node:48267) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
-PASS src/auth/entities/verification-token.entity.integration-spec.ts
-PASS src/worker.module.integration-spec.ts
-(node:48267) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
-PASS src/videos/video-processing.service.integration-spec.ts
 PASS src/media/media-probe.service.integration-spec.ts
-PASS src/videos/videos.module.integration-spec.ts
-(node:48267) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
-PASS src/users/users.module.spec.ts
-(node:48267) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
-PASS src/users/entities/user.entity.integration-spec.ts
-(node:48267) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+(node:61932) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
 PASS src/videos/videos.service.integration-spec.ts
-PASS src/mail/mail.module.spec.ts
-(node:48267) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+(node:61932) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+PASS src/videos/video-processing.service.integration-spec.ts
+PASS src/auth/auth.service.spec.ts
+PASS src/mail/mail.service.integration-spec.ts
+PASS src/openapi-export.integration-spec.ts
+PASS src/storage/storage.service.integration-spec.ts
+PASS src/videos/videos.module.integration-spec.ts
+(node:61932) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+PASS src/auth/auth.module.spec.ts
+(node:61932) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+PASS src/auth/entities/verification-token.entity.integration-spec.ts
+(node:61932) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+PASS src/auth/entities/refresh-token.entity.integration-spec.ts
+PASS src/worker.module.integration-spec.ts
+(node:61932) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+PASS src/videos/entities/video.entity.integration-spec.ts
+(node:61932) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+PASS src/users/users.service.integration-spec.ts
+(node:61932) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+PASS src/users/entities/user.entity.integration-spec.ts
+(node:61932) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+PASS src/channels/entities/channel.entity.integration-spec.ts
+(node:61932) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+PASS src/channels/channels.service.integration-spec.ts
+PASS src/messaging/messaging.module.integration-spec.ts
+(node:61932) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
 PASS src/channels/channels.module.spec.ts
+[Nest] 61932  - 11/15/2026, 6:22:36 PM   ERROR [VideosService] Could not abort multipart upload upload-1 of videos/cd122530-93e0-4df1-a5ee-7e058b37f0b3/original: storage down
+PASS src/videos/videos.service.spec.ts
+(node:61932) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+PASS src/users/users.module.spec.ts
 PASS src/database/migrations.integration-spec.ts
+PASS src/mail/mail.module.spec.ts
+PASS src/videos/video-processing.service.spec.ts
 PASS src/channels/channels.service.spec.ts
-PASS src/app.controller.spec.ts
+PASS src/storage/storage.module.spec.ts
+PASS src/media/media-probe.service.spec.ts
 PASS src/config/swagger.config.spec.ts
 PASS src/auth/guards/jwt-auth.guard.spec.ts
-PASS src/messaging/messaging.module.integration-spec.ts
-PASS src/storage/storage.service.integration-spec.ts
-(node:48267) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
-PASS src/videos/entities/video.entity.integration-spec.ts
-PASS src/config/env.validation.integration-spec.ts
-[31m[Nest] 48267  - [39m11/15/2026, 5:32:13 PM [31m  ERROR[39m [38;5;3m[VideoProcessingConsumer] [39m[31mCould not forward message (attempt 1): confirm timeout[39m
+[Nest] 61932  - 11/15/2026, 6:22:38 PM   ERROR [VideoProcessingConsumer] Could not forward message (attempt 1): confirm timeout
+[Nest] 61932  - 11/15/2026, 6:22:38 PM   ERROR [VideoProcessingConsumer] Could not forward message (attempt 2): confirm timeout
 PASS src/messaging/video-processing.consumer.spec.ts
+PASS src/app.controller.spec.ts
+[Nest] 61932  - 11/15/2026, 6:22:38 PM     LOG [VideoProcessingConsumer] Consuming ns.processing
+[Nest] 61932  - 11/15/2026, 6:22:38 PM     LOG [VideoProcessingConsumer] Consuming ns.processing
+[Nest] 61932  - 11/15/2026, 6:22:38 PM     LOG [VideoProcessingConsumer] Consuming ns.processing
+[Nest] 61932  - 11/15/2026, 6:22:38 PM     LOG [VideoProcessingConsumer] Consuming ns.processing
+[Nest] 61932  - 11/15/2026, 6:22:38 PM    WARN [VideoProcessingConsumer] Redelivered message counted as attempt 1
+[Nest] 61932  - 11/15/2026, 6:22:38 PM     LOG [VideoProcessingConsumer] Consuming ns.processing
+[Nest] 61932  - 11/15/2026, 6:22:38 PM    WARN [VideoProcessingConsumer] Redelivered message counted as attempt 3; parking it (the video stays processing until the owner calls complete again)
+[Nest] 61932  - 11/15/2026, 6:22:38 PM     LOG [VideoProcessingConsumer] Consuming ns.processing
+[Nest] 61932  - 11/15/2026, 6:22:38 PM    WARN [VideoProcessingConsumer] Redelivered message counted as attempt 2
+PASS src/config/env.validation.integration-spec.ts
 PASS src/common/filters/validation-exception.filter.spec.ts
-[32m[Nest] 48267  - [39m11/15/2026, 5:32:13 PM [32m    LOG[39m [38;5;3m[VideoProcessingConsumer] [39m[32mConsuming ns.processing[39m
-[32m[Nest] 48267  - [39m11/15/2026, 5:32:13 PM [32m    LOG[39m [38;5;3m[VideoProcessingConsumer] [39m[32mConsuming ns.processing[39m
-[32m[Nest] 48267  - [39m11/15/2026, 5:32:13 PM [32m    LOG[39m [38;5;3m[VideoProcessingConsumer] [39m[32mConsuming ns.processing[39m
-PASS src/storage/storage.module.spec.ts
-PASS src/videos/video-processing.service.spec.ts
 PASS src/common/filters/domain-exception.filter.spec.ts
 PASS src/channels/nickname.util.spec.ts
 
-Test Suites: 36 passed, 36 total
-Tests:       221 passed, 221 total
+Test Suites: 37 passed, 37 total
+Tests:       249 passed, 249 total
 Snapshots:   0 total
-Time:        23.405 s, estimated 62 s
+Time:        22.22 s
 Ran all test suites.
