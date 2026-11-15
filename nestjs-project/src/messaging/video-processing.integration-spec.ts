@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto';
+import { connect } from 'amqplib';
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigModule } from '@nestjs/config';
 import messagingConfig from '../config/messaging.config';
@@ -100,6 +101,43 @@ describe('Video processing messaging (integration — RabbitMQ)', () => {
     });
     expect(parked[0].headers['x-attempt']).toBe(1);
     expect(deliveries).toHaveLength(1);
+  });
+
+  it('counts a delivery lost by a crashed worker as an attempt (no endless redelivery)', async () => {
+    const crashNamespace = useIsolatedQueueNamespaceForTests('crash');
+    const crashModule = await buildModule();
+    const crashDeliveries: Delivery[] = [];
+    try {
+      const videoId = randomUUID();
+      await crashModule
+        .get(VideoProcessingPublisher)
+        .publishVideoUploaded(videoId);
+
+      // A "worker" takes the message and dies before settling it: RabbitMQ
+      // requeues it with redelivered = true and the same x-attempt.
+      const { queue } = videoProcessingTopology(crashNamespace);
+      const connection = await connect(process.env.RABBITMQ_URL ?? '');
+      const raw = await connection.createChannel();
+      const taken = await waitFor(async () => raw.get(queue, { noAck: false }));
+      expect(taken.properties.headers?.['x-attempt']).toBe(1);
+      await connection.close();
+
+      await crashModule
+        .get(VideoProcessingConsumer)
+        .start((message, context) => {
+          crashDeliveries.push({ message, context });
+          return Promise.resolve('ok');
+        });
+
+      await waitFor(() => Promise.resolve(crashDeliveries.length === 1));
+      expect(crashDeliveries[0]).toEqual({
+        message: { video_id: videoId },
+        context: { attempt: 2, isLastAttempt: false },
+      });
+    } finally {
+      await crashModule.close();
+      await deleteQueueNamespace(crashNamespace);
+    }
   });
 
   it('does not deliver messages from another namespace', async () => {

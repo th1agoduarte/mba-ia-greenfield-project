@@ -1,3 +1,4 @@
+import { execFileSync } from 'child_process';
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -110,6 +111,39 @@ describe('VideoProcessingService (integration — Postgres + MinIO + ffmpeg)', (
     const saved = await videoRepository.findOneByOrFail({ id: video.id });
     expect(saved.status).toBe(VideoStatus.FAILED);
     expect(saved.processing_error).toMatch(/Invalid data|no video stream/);
+  });
+
+  it('marks a still image uploaded as a video as failed, never ready', async () => {
+    const png = execFileSync(
+      'ffmpeg',
+      [
+        '-v',
+        'error',
+        '-f',
+        'lavfi',
+        '-i',
+        'testsrc=size=320x240',
+        '-frames:v',
+        '1',
+        '-c:v',
+        'png',
+        '-f',
+        'image2pipe',
+        'pipe:1',
+      ],
+      { maxBuffer: 10 * 1024 * 1024 },
+    );
+    const video = await processingVideo(png);
+
+    const outcome = await service.handle(
+      { video_id: video.id },
+      { attempt: 1, isLastAttempt: false },
+    );
+
+    expect(outcome).toBe('fail');
+    const saved = await videoRepository.findOneByOrFail({ id: video.id });
+    expect(saved.status).toBe(VideoStatus.FAILED);
+    expect(saved.thumbnail_key).toBeNull();
   });
 
   it('ignores a duplicate delivery for a video that is already ready', async () => {

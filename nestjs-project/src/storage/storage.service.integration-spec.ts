@@ -47,11 +47,11 @@ describe('StorageService (integration — MinIO)', () => {
     const uploadId = await storage.createMultipartUpload(key, 'video/mp4');
 
     const etag1 = await putPart(
-      await storage.presignUploadPart(key, uploadId, 1),
+      await storage.presignUploadPart(key, uploadId, 1, part1.length),
       part1,
     );
     const etag2 = await putPart(
-      await storage.presignUploadPart(key, uploadId, 2),
+      await storage.presignUploadPart(key, uploadId, 2, part2.length),
       part2,
     );
 
@@ -67,6 +67,31 @@ describe('StorageService (integration — MinIO)', () => {
     const head = await storage.headObject(key);
     expect(head?.contentLength).toBe(FIVE_MIB + 1024);
     expect(head?.contentType).toBe('video/mp4');
+  });
+
+  it('signs the part size: the storage refuses a PUT larger or smaller than signed', async () => {
+    const key = newKey();
+    const uploadId = await storage.createMultipartUpload(key, 'video/mp4');
+    const url = await storage.presignUploadPart(key, uploadId, 1, 1024);
+    expect(new URL(url).searchParams.get('X-Amz-SignedHeaders')).toContain(
+      'content-length',
+    );
+
+    for (const size of [1025, 1023]) {
+      const res = await fetch(url, {
+        method: 'PUT',
+        body: new Uint8Array(randomBytes(size)),
+      });
+      expect(res.status).toBe(403);
+      expect(await res.text()).toContain('SignatureDoesNotMatch');
+    }
+    expect(await storage.listParts(key, uploadId)).toEqual([]);
+
+    await putPart(url, randomBytes(1024));
+    expect(await storage.listParts(key, uploadId)).toMatchObject([
+      { part_number: 1, size: 1024 },
+    ]);
+    await storage.abortMultipartUpload(key, uploadId);
   });
 
   it('serves a presigned GET with Range as 206 Partial Content', async () => {
@@ -96,7 +121,30 @@ describe('StorageService (integration — MinIO)', () => {
 
     expect(res.status).toBe(200);
     expect(res.headers.get('content-disposition')).toBe(
-      'attachment; filename="my _clip_.mp4"',
+      `attachment; filename="my _clip_.mp4"; filename*=UTF-8''my%20%22clip%22.mp4`,
+    );
+  });
+
+  it('keeps a non-ASCII file name in filename* (RFC 5987) and strips CR/LF', async () => {
+    const key = newKey();
+    await storage.putObject(key, randomBytes(10), 'video/mp4');
+
+    const res = await fetch(
+      await storage.presignGetObject(key, {
+        downloadFileName: "Férias (São João)\r\nX-Injected: 1 'ok'.mp4",
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('x-injected')).toBeNull();
+    const disposition = res.headers.get('content-disposition')!;
+    expect(disposition).toBe(
+      'attachment; filename="F_rias (S_o Jo_o)__X-Injected: 1 \'ok\'.mp4"; ' +
+        "filename*=UTF-8''F%C3%A9rias%20%28S%C3%A3o%20Jo%C3%A3o%29%0D%0AX-Injected%3A%201%20%27ok%27.mp4",
+    );
+    const encoded = disposition.split("filename*=UTF-8''")[1];
+    expect(decodeURIComponent(encoded)).toBe(
+      "Férias (São João)\r\nX-Injected: 1 'ok'.mp4",
     );
   });
 
@@ -104,7 +152,7 @@ describe('StorageService (integration — MinIO)', () => {
     const key = newKey();
     const uploadId = await storage.createMultipartUpload(key, 'video/mp4');
     await putPart(
-      await storage.presignUploadPart(key, uploadId, 1),
+      await storage.presignUploadPart(key, uploadId, 1, 10),
       randomBytes(10),
     );
 

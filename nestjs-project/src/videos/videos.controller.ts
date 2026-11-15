@@ -36,8 +36,11 @@ const ERROR = { $ref: getSchemaPath(ApiErrorEnvelope) };
 
 /**
  * Video upload, processing status, streaming and download. Every route is
- * owner-only; the throttler is skipped because a 10 GiB upload needs many
- * part-URL requests (phase-03-videos/TD-02, TD-08 Revisions).
+ * owner-only. The global throttler (10 req/60 s) is skipped only on the routes
+ * a client calls in a loop — part URLs and the parts list during a long
+ * upload/resume, status polling, stream/download re-requests — and stays on
+ * the routes that create work (draft + multipart, complete/publish, abort)
+ * (phase-03-videos/TD-02, TD-08 Revisions).
  */
 @ApiTags('videos')
 @ApiBearerAuth('access-token')
@@ -46,7 +49,6 @@ const ERROR = { $ref: getSchemaPath(ApiErrorEnvelope) };
   description: 'Missing or invalid access token',
   schema: ERROR,
 })
-@SkipThrottle()
 @Controller('videos')
 export class VideosController {
   constructor(private readonly videosService: VideosService) {}
@@ -63,6 +65,11 @@ export class VideosController {
     type: InitiatedUploadDto,
   })
   @ApiResponse({ status: 400, description: 'Validation failed', schema: ERROR })
+  @ApiResponse({
+    status: 404,
+    description: 'The authenticated user has no channel',
+    schema: ERROR,
+  })
   initiate(
     @CurrentUser() user: JwtPayload,
     @Body() dto: CreateVideoDto,
@@ -71,10 +78,12 @@ export class VideosController {
   }
 
   @Post(':slug/upload/part-urls')
+  @SkipThrottle()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Get presigned part upload URLs',
-    description: 'Returns presigned PUT URLs (1 h) for up to 100 parts.',
+    description:
+      'Returns presigned PUT URLs (1 h) for up to 100 parts. Each URL is signed for the exact part size (64 MiB, the last part carries the remainder of the declared file_size); the storage rejects a body of any other size.',
   })
   @ApiResponse({
     status: 200,
@@ -101,6 +110,7 @@ export class VideosController {
   }
 
   @Get(':slug/upload/parts')
+  @SkipThrottle()
   @ApiOperation({
     summary: 'List uploaded parts',
     description:
@@ -129,7 +139,7 @@ export class VideosController {
   @ApiOperation({
     summary: 'Complete an upload and start processing',
     description:
-      'Completes the multipart upload, sets the video to processing and enqueues it for the worker. Idempotent while processing.',
+      'Completes the multipart upload, sets the video to processing and enqueues it for the worker. Repeatable: calling it again while processing re-enqueues the job (the worker ignores duplicates).',
   })
   @ApiResponse({
     status: 202,
@@ -176,6 +186,7 @@ export class VideosController {
   }
 
   @Get(':slug')
+  @SkipThrottle()
   @ApiOperation({
     summary: 'Get a video',
     description:
@@ -191,6 +202,7 @@ export class VideosController {
   }
 
   @Get(':slug/stream')
+  @SkipThrottle()
   @Redirect()
   @ApiOperation({
     summary: 'Stream a video',
@@ -216,6 +228,7 @@ export class VideosController {
   }
 
   @Get(':slug/download')
+  @SkipThrottle()
   @Redirect()
   @ApiOperation({
     summary: 'Download a video',

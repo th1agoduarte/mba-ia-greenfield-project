@@ -1,9 +1,10 @@
 import { randomBytes, randomUUID } from 'crypto';
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { QueryFailedError, Repository } from 'typeorm';
 import { ChannelsService } from '../channels/channels.service';
 import {
+  ChannelNotFoundException,
   InvalidPartNumberException,
   UploadTooLargeException,
   VideoInvalidStateException,
@@ -51,8 +52,18 @@ export function partCountFor(sizeBytes: number): number {
   return Math.ceil(sizeBytes / VIDEO_UPLOAD.PART_SIZE_BYTES);
 }
 
+/** Exact size of a part: 64 MiB, the last one carries the remainder. */
+export function partSizeFor(sizeBytes: number, partNumber: number): number {
+  const lastPart = partCountFor(sizeBytes);
+  return partNumber < lastPart
+    ? VIDEO_UPLOAD.PART_SIZE_BYTES
+    : sizeBytes - (lastPart - 1) * VIDEO_UPLOAD.PART_SIZE_BYTES;
+}
+
 @Injectable()
 export class VideosService {
+  private readonly logger = new Logger(VideosService.name);
+
   constructor(
     @InjectRepository(Video)
     private readonly videoRepository: Repository<Video>,
@@ -71,7 +82,7 @@ export class VideosService {
   ): Promise<InitiatedUploadDto> {
     const channel = await this.channelsService.findByUserId(userId);
     if (!channel) {
-      throw new Error(`User ${userId} has no channel`);
+      throw new ChannelNotFoundException();
     }
 
     const id = randomUUID();
@@ -102,8 +113,16 @@ export class VideosService {
         },
       };
     } catch (err) {
-      // Compensation: do not leave an orphan multipart upload behind.
-      await this.storageService.abortMultipartUpload(storageKey, uploadId);
+      // Compensation: do not leave an orphan multipart upload behind. A failed
+      // abort is only logged (MinIO expires stale uploads), so the original
+      // error is the one the caller sees.
+      try {
+        await this.storageService.abortMultipartUpload(storageKey, uploadId);
+      } catch (abortErr) {
+        this.logger.error(
+          `Could not abort multipart upload ${uploadId} of ${storageKey}: ${(abortErr as Error).message}`,
+        );
+      }
       throw err;
     }
   }
@@ -125,6 +144,7 @@ export class VideosService {
           video.storage_key,
           video.upload_id!,
           partNumber,
+          partSizeFor(video.size_bytes, partNumber),
         ),
       })),
     );
@@ -155,10 +175,14 @@ export class VideosService {
 
   /**
    * Closes the multipart upload, moves the video to `processing` and
-   * publishes `video.uploaded` (TD-09, TD-12). Idempotent: a video already in
-   * `processing` is returned as is, without a second message, and only the
-   * call whose conditional update wins publishes. If publishing fails, the
-   * status is compensated back to `draft` and the call can be retried.
+   * publishes `video.uploaded` (TD-09, TD-12). Repeatable: calling it again
+   * while `processing` republishes the message, so a call that committed
+   * `processing` but died before publishing (or a message parked in the dead
+   * queue) can be recovered by the client; duplicates are harmless because the
+   * worker skips videos that are no longer `processing`. Among concurrent
+   * calls on a draft, only the one whose conditional update wins publishes.
+   * If publishing fails, the status is compensated back to `draft` and the
+   * call can be retried.
    */
   async completeUpload(
     userId: string,
@@ -167,6 +191,7 @@ export class VideosService {
   ): Promise<VideoSummaryDto> {
     const video = await this.findOwnedOrFail(userId, slug);
     if (video.status === VideoStatus.PROCESSING) {
+      await this.publisher.publishVideoUploaded(video.id);
       return toVideoSummary(video);
     }
     if (video.status !== VideoStatus.DRAFT) {
@@ -188,7 +213,8 @@ export class VideosService {
       throw new VideoInvalidStateException(video.status);
     }
 
-    // Part sizes are chosen by the client: enforce the 10 GiB cap on the result.
+    // Part URLs are signed for exact sizes; the cap on the assembled object is
+    // kept as a second line of defence.
     if (head.contentLength > VIDEO_UPLOAD.MAX_SIZE_BYTES) {
       await this.videoRepository.update(
         { id: video.id, status: VideoStatus.DRAFT },
