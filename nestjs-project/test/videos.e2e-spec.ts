@@ -1,5 +1,6 @@
 import { randomBytes } from 'crypto';
 import { JwtService } from '@nestjs/jwt';
+import { ThrottlerStorage, ThrottlerStorageService } from '@nestjs/throttler';
 import request from 'supertest';
 import { cleanAllTables } from '../src/test/create-test-data-source';
 import { deleteQueueNamespace } from '../src/test/messaging';
@@ -34,6 +35,8 @@ describe('Videos (e2e)', () => {
 
   beforeEach(async () => {
     await cleanAllTables(ctx.dataSource);
+    // POST /videos, complete and abort keep the global throttler (10/60 s).
+    ctx.module.get<ThrottlerStorageService>(ThrottlerStorage).storage.clear();
     ({ token } = await createUserWithToken(ctx));
     ({ token: otherToken } = await createUserWithToken(ctx));
   });
@@ -120,6 +123,17 @@ describe('Videos (e2e)', () => {
         .expect(404);
 
       expect(res.body.error).toBe('CHANNEL_NOT_FOUND');
+    });
+
+    it('keeps the global throttle: the 11th POST /videos in a minute gets 429', async () => {
+      for (let i = 0; i < 10; i++) {
+        await createDraft({ ...validBody, file_size: 1024 });
+      }
+      await http()
+        .post('/videos')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ ...validBody, file_size: 1024 })
+        .expect(429);
     });
 
     it('gives two videos different slugs', async () => {
@@ -277,6 +291,29 @@ describe('Videos (e2e)', () => {
         .set('Authorization', `Bearer ${otherToken}`)
         .send({ parts: [{ part_number: 1, etag }] })
         .expect(404);
+    });
+  });
+
+  describe('throttling of the upload and polling loops', () => {
+    it('does not throttle status polling, part URLs and the parts list', async () => {
+      const { slug } = await createDraft();
+      const auth = `Bearer ${token}`;
+
+      for (let i = 0; i < 12; i++) {
+        await http()
+          .get(`/videos/${slug}`)
+          .set('Authorization', auth)
+          .expect(200);
+        await http()
+          .post(`/videos/${slug}/upload/part-urls`)
+          .set('Authorization', auth)
+          .send({ part_numbers: [1] })
+          .expect(200);
+        await http()
+          .get(`/videos/${slug}/upload/parts`)
+          .set('Authorization', auth)
+          .expect(200);
+      }
     });
   });
 
